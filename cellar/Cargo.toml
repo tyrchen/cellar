@@ -27,7 +27,7 @@ keywords = ["password", "security", "cryptography"]
 
 [dependencies]
 anyhow = "1"
-cellar-core = { path = "../cellar-core" }
+cellar-core = "0.1"
 dialoguer = "0.5"
 dirs = "2"
 structopt = "0.3"
