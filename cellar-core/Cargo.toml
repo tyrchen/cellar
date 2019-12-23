@@ -19,7 +19,7 @@ description = """
 A password tool for user to derive a large amount of application passwords deterministically based on a passphrase. Cryptographically strong.
 """
 readme = "../README.md"
-categories = ["utility"]
+categories = ["cryptography"]
 keywords = ["password", "security", "cryptography"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

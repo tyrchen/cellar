@@ -19,7 +19,7 @@ description = """
 A password tool for user to derive a large amount of application passwords deterministically based on a passphrase. Cryptographically strong.
 """
 readme = "../README.md"
-categories = ["utility"]
+categories = ["command-line-utilities"]
 keywords = ["password", "security", "cryptography"]
 
 
