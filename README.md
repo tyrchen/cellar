@@ -38,6 +38,16 @@ Password: [hidden]
 Your cellar "$HOME/.cellar/default.toml" is created! Feel free to use `cellar generate` to create or display your application password.
 ```
 
+after initialization, a `~/.cellar/default.toml` is generated. This files stores the random salt and the encrypted random seed like this:
+
+```bash
+$ cat ~/.cellar/default.toml
+salt = "C6TQW8joYp2XoIkvaCNfo0ihJ3OacxlTbx68_oW8pF4"
+encrypted_seed = "bHn5Lu3yX0g68rRJ4lTOwAvx_uMDFaBnZ_WMkJSU8TM"
+```
+
+Note that even if you regenerate the cellar with the same password you will get very different master key and derived application keys. So make sure you backup this file into your private cloud.
+
 ## cellar generate
 
 Generate an application password.

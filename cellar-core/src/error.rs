@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// contains all the errors used in cellar-core. It is pretty general now, will evolve as the code goes.
+/// contains all the errors used in cellar-core.
 #[derive(Error, Debug)]
 pub enum CellarError {
     #[error("{0}")]
