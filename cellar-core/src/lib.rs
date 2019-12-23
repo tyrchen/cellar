@@ -20,8 +20,8 @@
 //! ## Usage
 //! ```rust
 //! let passphrase = "hello";
-//! let aux = init(passphrase)?;
-//! let app_key = generate_app_key(passphrase, &aux, "user@gmail.com".as_bytes())?;
+//! let aux = cellar_core::init(passphrase).unwrap();
+//! let app_key = cellar_core::generate_app_key(passphrase, &aux, "user@gmail.com".as_bytes()).unwrap();
 //! ```
 //!
 //! You can also use the CLI version of the tool, which could be found in the repository.

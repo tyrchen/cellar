@@ -1,8 +1,26 @@
 [package]
 name = "cellar-core"
+# When releasing to crates.io:
+# - Remove path dependencies
+# - Update html_root_url.
+# - Update doc url
+#   - Cargo.toml
+#   - README.md
+# - Update CHANGELOG.md.
+# - Create git tag.
 version = "0.1.0"
 authors = ["Tyr Chen <tyr.chen@gmail.com>"]
 edition = "2018"
+license = "MIT"
+documentation = "https://docs.rs/cellar/0.1.0/cellar_core/"
+repository = "https://github.com/tyrchen/cellar"
+homepage = "https://github.com/tyrchen/cellar"
+description = """
+A password tool for user to derive a large amount of application passwords deterministically based on a passphrase. Cryptographically strong.
+"""
+readme = "../README.md"
+categories = ["utility"]
+keywords = ["password", "security", "cryptography"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
