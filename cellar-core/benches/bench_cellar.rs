@@ -1,5 +1,5 @@
 use base64::URL_SAFE_NO_PAD;
-use cellar_core::{generate_app_key, init};
+use cellar_core::{generate_app_key, init, KeyType};
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::RngCore;
 
@@ -16,7 +16,7 @@ fn gen_app_key(c: &mut Criterion) {
             rng.fill_bytes(&mut info);
             let passphrase = base64::encode_config(&buf, URL_SAFE_NO_PAD);
             let aux = init(&passphrase).unwrap();
-            generate_app_key(&passphrase, &aux, &info).unwrap();
+            generate_app_key(&passphrase, &aux, &info, KeyType::Password).unwrap();
         })
     });
 }

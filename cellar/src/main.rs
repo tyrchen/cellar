@@ -50,7 +50,8 @@ fn main() -> Result<()> {
             Command::Generate {
                 config_file: ConfigFile { name },
                 app_info,
-            } => commands::generate(&name, &app_info).await,
+                key_type,
+            } => commands::generate(&name, &app_info, key_type).await,
         }
     };
 
