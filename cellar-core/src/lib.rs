@@ -21,7 +21,7 @@
 //! ```rust
 //! let passphrase = "hello";
 //! let aux = cellar_core::init(passphrase).unwrap();
-//! let app_key = cellar_core::generate_app_key(passphrase, &aux, "user@gmail.com".as_bytes()).unwrap();
+//! let app_key = cellar_core::generate_app_key(passphrase, &aux, "user@gmail.com".as_bytes()， KeyType::Password).unwrap();
 //! ```
 //!
 //! You can also use the CLI version of the tool, which could be found in the repository.
@@ -29,6 +29,7 @@ use base64::URL_SAFE_NO_PAD;
 use blake2s_simd::Params;
 use c2_chacha::stream_cipher::{NewStreamCipher, SyncStreamCipher};
 use c2_chacha::ChaCha20;
+use ed25519_dalek::{Keypair, PublicKey, SecretKey};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
 
@@ -41,6 +42,13 @@ pub type Key = [u8; 32];
 pub struct AuxiliaryData {
     salt: String,
     encrypted_seed: String,
+}
+
+#[derive(Debug)]
+pub enum KeyType {
+    Password,
+    Keypair,
+    Certificate,
 }
 
 const AUTH_KEY_INFO: &[u8] = b"Auth Key";
@@ -75,10 +83,21 @@ pub fn generate_app_key(
     passphrase: &str,
     aux: &AuxiliaryData,
     info: &[u8],
-) -> Result<String, CellarError> {
+    key_type: KeyType,
+) -> Result<Vec<u8>, CellarError> {
     let master_key = generate_master_key(passphrase, aux)?;
     let app_key = generate_derived_key(&master_key, info);
-    Ok(base64::encode_config(&app_key, URL_SAFE_NO_PAD))
+    match key_type {
+        KeyType::Password => Ok(Vec::from(&app_key[..])),
+        KeyType::Keypair => {
+            let secret: SecretKey = SecretKey::from_bytes(&app_key).unwrap();
+            let public: PublicKey = (&secret).into();
+            let keypair = Keypair { secret, public };
+
+            Ok(Vec::from(&keypair.to_bytes()[..]))
+        }
+        KeyType::Certificate => unimplemented!(),
+    }
 }
 
 #[inline]
@@ -133,21 +152,57 @@ mod tests {
     fn same_passphrase_produce_same_keys() -> Result<(), CellarError> {
         let passphrase = "hello";
         let aux = init(passphrase)?;
-        let app_key = generate_app_key(passphrase, &aux, "user@gmail.com".as_bytes())?;
-        let app_key1 = generate_app_key(passphrase, &aux, "user1@gmail.com".as_bytes())?;
+        let app_key = generate_app_key(
+            passphrase,
+            &aux,
+            "user@gmail.com".as_bytes(),
+            KeyType::Password,
+        )?;
+        let app_key1 = generate_app_key(
+            passphrase,
+            &aux,
+            "user1@gmail.com".as_bytes(),
+            KeyType::Password,
+        )?;
 
         assert_ne!(app_key1, app_key);
 
-        let app_key2 = generate_app_key(passphrase, &aux, "user@gmail.com".as_bytes())?;
+        let app_key2 = generate_app_key(
+            passphrase,
+            &aux,
+            "user@gmail.com".as_bytes(),
+            KeyType::Password,
+        )?;
         assert_eq!(app_key2, app_key);
+        Ok(())
+    }
+
+    #[test]
+    fn generate_usable_keypair() -> Result<(), CellarError> {
+        let passphrase = "hello";
+        let aux = init(passphrase)?;
+        let key = generate_app_key(
+            passphrase,
+            &aux,
+            "user@gmail.com".as_bytes(),
+            KeyType::Keypair,
+        )?;
+
+        let keypair = Keypair::from_bytes(&key[..]).unwrap();
+        let content = b"hello world";
+        let sig = keypair.sign(content);
+        let verified = keypair.public.verify(content, &sig);
+        assert!(verified.is_ok());
         Ok(())
     }
 
     #[quickcheck]
     fn prop_same_passphrase_produce_same_keys(passphrase: String, app_info: String) -> bool {
         let aux = init(&passphrase).unwrap();
-        let app_key = generate_app_key(&passphrase, &aux, &app_info.as_bytes()).unwrap();
+        let app_key =
+            generate_app_key(&passphrase, &aux, &app_info.as_bytes(), KeyType::Password).unwrap();
 
-        app_key == generate_app_key(&passphrase, &aux, &app_info.as_bytes()).unwrap()
+        app_key
+            == generate_app_key(&passphrase, &aux, &app_info.as_bytes(), KeyType::Password).unwrap()
     }
 }

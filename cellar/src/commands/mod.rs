@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
-use cellar_core::AuxiliaryData;
+use base64::URL_SAFE_NO_PAD;
+use cellar_core::{AuxiliaryData, KeyType};
 use dialoguer::{theme::ColorfulTheme, PasswordInput};
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -10,6 +11,18 @@ fn parse_dir(src: &str) -> PathBuf {
         dirs::home_dir().unwrap().join(src.replace("~/", ""))
     } else {
         PathBuf::from(src)
+    }
+}
+
+fn parse_type(src: &str) -> Result<KeyType> {
+    match src {
+        "password" => Ok(KeyType::Password),
+        "keypair" => Ok(KeyType::Keypair),
+        "certificate" => Ok(KeyType::Certificate),
+        &_ => Err(anyhow!(format!(
+            "Invalid key type {}. Avaliable choices: password, keypair",
+            src
+        ))),
     }
 }
 
@@ -30,6 +43,9 @@ pub enum Command {
         /// application specific info, e.g. user@gmail.com
         #[structopt(short = "i", long)]
         app_info: String,
+        /// generate password or keypair
+        #[structopt(short = "t", parse(try_from_str=parse_type), default_value="password")]
+        key_type: KeyType,
     },
 }
 
@@ -60,7 +76,7 @@ pub async fn init(name: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-pub async fn generate(name: &PathBuf, app_info: &str) -> Result<()> {
+pub async fn generate(name: &PathBuf, app_info: &str, key_type: KeyType) -> Result<()> {
     if !name.exists() {
         return Err(anyhow!(format!("Configuration file {:?} doesn't exist. Please make sure you have initialized your cellar. See `cellar init --help` for more information.", name)));
     }
@@ -70,8 +86,13 @@ pub async fn generate(name: &PathBuf, app_info: &str) -> Result<()> {
     let password = prompt_password(false)?;
 
     let info = app_info.as_bytes();
-    let app_key = cellar_core::generate_app_key(&password, &aux, info)?;
-    println!("Password for {}: {}", app_info, app_key);
+
+    let app_key = cellar_core::generate_app_key(&password, &aux, info, key_type)?;
+    println!(
+        "Key for {}: {}",
+        app_info,
+        base64::encode_config(&app_key[..], URL_SAFE_NO_PAD)
+    );
     Ok(())
 }
 
