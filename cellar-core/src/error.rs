@@ -11,6 +11,10 @@ pub enum CellarError {
     Base64DecodeError(#[from] base64::DecodeError),
     #[error("{0}")]
     IOError(#[from] std::io::Error),
+    #[error("{0}")]
+    ConvertError(#[from] std::array::TryFromSliceError),
+    #[error("{0}")]
+    InvalidKeypair(#[from] ed25519_dalek::SignatureError),
     #[error("unknown error")]
     Unknown,
 }

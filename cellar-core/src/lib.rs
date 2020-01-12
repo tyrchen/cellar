@@ -21,7 +21,7 @@
 //! ```rust
 //! let passphrase = "hello";
 //! let aux = cellar_core::init(passphrase).unwrap();
-//! let app_key = cellar_core::generate_app_key(passphrase, &aux, "user@gmail.com".as_bytes()， KeyType::Password).unwrap();
+//! let app_key = cellar_core::generate_app_key(passphrase, &aux, "user@gmail.com".as_bytes(), Default::default()).unwrap();
 //! ```
 //!
 //! You can also use the CLI version of the tool, which could be found in the repository.
@@ -32,6 +32,7 @@ use c2_chacha::ChaCha20;
 use ed25519_dalek::{Keypair, PublicKey, SecretKey};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 
 mod error;
 pub use error::CellarError;
@@ -49,6 +50,12 @@ pub enum KeyType {
     Password,
     Keypair,
     Certificate,
+}
+
+impl Default for KeyType {
+    fn default() -> Self {
+        KeyType::Password
+    }
 }
 
 const AUTH_KEY_INFO: &[u8] = b"Auth Key";
@@ -78,7 +85,7 @@ pub fn init(passphrase: &str) -> Result<AuxiliaryData, CellarError> {
     })
 }
 
-/// generate application password based on user's passphrase, auxilliary data (salt and seed), as well as the app info as an entropy.
+/// generate application key based on user's passphrase, auxilliary data (salt and seed), as well as the app info as an entropy.
 pub fn generate_app_key(
     passphrase: &str,
     aux: &AuxiliaryData,
@@ -87,14 +94,30 @@ pub fn generate_app_key(
 ) -> Result<Vec<u8>, CellarError> {
     let master_key = generate_master_key(passphrase, aux)?;
     let app_key = generate_derived_key(&master_key, info);
-    match key_type {
-        KeyType::Password => Ok(Vec::from(&app_key[..])),
-        KeyType::Keypair => {
-            let secret: SecretKey = SecretKey::from_bytes(&app_key).unwrap();
-            let public: PublicKey = (&secret).into();
-            let keypair = Keypair { secret, public };
+    generate_by_key_type(app_key, key_type)
+}
 
-            Ok(Vec::from(&keypair.to_bytes()[..]))
+/// generate application key based on parent key and path. e.g. `apps/my/awesome/app`.
+pub fn generate_app_key_by_path(
+    parent_key: Key,
+    path: &str,
+    key_type: KeyType,
+) -> Result<Vec<u8>, CellarError> {
+    //let sum = a.iter().fold(0, |acc, x| acc + x);
+    let app_key = path.split('/').fold(parent_key, |acc, part| {
+        generate_derived_key(&acc, part.as_bytes())
+    });
+    generate_by_key_type(app_key, key_type)
+}
+
+/// covert the generated application key to a parent key which could be used to derive other keys
+pub fn as_parent_key(app_key: &[u8], key_type: KeyType) -> Result<Key, CellarError> {
+    match key_type {
+        KeyType::Password => Ok(<Key>::try_from(app_key)?),
+        KeyType::Keypair => {
+            let keypair = Keypair::from_bytes(app_key)?;
+            let secret_key = keypair.secret.to_bytes();
+            Ok(secret_key)
         }
         KeyType::Certificate => unimplemented!(),
     }
@@ -139,6 +162,21 @@ fn generate_derived_key(stretch_key: &Key, info: &[u8]) -> Key {
     params.hash(info).as_array().to_owned()
 }
 
+#[inline]
+fn generate_by_key_type(app_key: Key, key_type: KeyType) -> Result<Vec<u8>, CellarError> {
+    match key_type {
+        KeyType::Password => Ok(Vec::from(&app_key[..])),
+        KeyType::Keypair => {
+            let secret: SecretKey = SecretKey::from_bytes(&app_key).unwrap();
+            let public: PublicKey = (&secret).into();
+            let keypair = Keypair { secret, public };
+
+            Ok(Vec::from(&keypair.to_bytes()[..]))
+        }
+        KeyType::Certificate => unimplemented!(),
+    }
+}
+
 #[cfg(test)]
 extern crate quickcheck;
 #[cfg(test)]
@@ -178,7 +216,7 @@ mod tests {
     }
 
     #[test]
-    fn generate_usable_keypair() -> Result<(), CellarError> {
+    fn generate_usable_keypair_should_work() -> Result<(), CellarError> {
         let passphrase = "hello";
         let aux = init(passphrase)?;
         let key = generate_app_key(
@@ -193,6 +231,22 @@ mod tests {
         let sig = keypair.sign(content);
         let verified = keypair.public.verify(content, &sig);
         assert!(verified.is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn generate_key_by_path_should_work() -> Result<(), CellarError> {
+        let passphrase = "hello";
+        let aux = init(passphrase)?;
+        let key = generate_master_key(passphrase, &aux)?;
+        let parent_key = generate_app_key(passphrase, &aux, "apps".as_bytes(), KeyType::Password)?;
+        let app_key = generate_app_key_by_path(key, "apps/my/awesome/key", KeyType::Password)?;
+        let app_key1 = generate_app_key_by_path(
+            as_parent_key(&parent_key, KeyType::Password)?,
+            "my/awesome/key",
+            KeyType::Password,
+        )?;
+        assert_eq!(app_key, app_key1);
         Ok(())
     }
 
