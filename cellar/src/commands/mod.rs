@@ -43,9 +43,12 @@ pub enum Command {
         /// application specific info, e.g. user@gmail.com
         #[structopt(short = "i", long)]
         app_info: String,
-        /// generate password or keypair
+        /// generated key type - password or keypair
         #[structopt(short = "t", parse(try_from_str=parse_type), default_value="password")]
         key_type: KeyType,
+        /// use parent key instead of password
+        #[structopt(long)]
+        use_parent_key: bool,
     },
 }
 
@@ -76,18 +79,29 @@ pub async fn init(name: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-pub async fn generate(name: &PathBuf, app_info: &str, key_type: KeyType) -> Result<()> {
+pub async fn generate(
+    name: &PathBuf,
+    app_info: &str,
+    key_type: KeyType,
+    use_parent_key: bool,
+) -> Result<()> {
     if !name.exists() {
         return Err(anyhow!(format!("Configuration file {:?} doesn't exist. Please make sure you have initialized your cellar. See `cellar init --help` for more information.", name)));
     }
 
-    let content = fs::read_to_string(name).await?;
-    let aux: AuxiliaryData = toml::from_str(&content)?;
-    let password = prompt_password(false)?;
+    let parent_key = if use_parent_key {
+        let parent_key_str = prompt_parent_key()?;
+        let data = base64::decode_config(&parent_key_str, URL_SAFE_NO_PAD)?;
+        cellar_core::as_parent_key(&data, key_type.clone())?
+    } else {
+        let content = fs::read_to_string(name).await?;
+        let aux: AuxiliaryData = toml::from_str(&content)?;
+        let password = prompt_password(false)?;
 
-    let info = app_info.as_bytes();
+        cellar_core::generate_master_key(&password, &aux)?
+    };
 
-    let app_key = cellar_core::generate_app_key(&password, &aux, info, key_type)?;
+    let app_key = cellar_core::generate_app_key_by_path(parent_key, app_info, key_type)?;
     println!(
         "Key for {}: {}",
         app_info,
@@ -110,4 +124,13 @@ fn prompt_password(confirmation: bool) -> Result<String> {
     };
 
     Ok(password)
+}
+
+#[inline]
+fn prompt_parent_key() -> Result<String> {
+    let key = PasswordInput::with_theme(&ColorfulTheme::default())
+        .with_prompt("Parent Key")
+        .interact()?;
+
+    Ok(key)
 }
