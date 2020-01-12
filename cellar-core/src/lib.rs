@@ -37,8 +37,8 @@ use zeroize::{Zeroize, Zeroizing};
 mod error;
 pub use error::CellarError;
 
-const KEY_SIZE: usize = 32;
-pub type Key = [u8; KEY_SIZE];
+pub const KEY_SIZE: usize = 32;
+pub type Key = Zeroizing<[u8; KEY_SIZE]>;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Zeroize)]
 #[zeroize(drop)]
@@ -67,13 +67,13 @@ const CHACHA20_NONCE_LENGTH: usize = 8;
 /// initialize a cellar. Return the salt and encrypted seed that user shall store them for future password generation and retrieval.
 pub fn init(passphrase: &str) -> Result<AuxiliaryData, CellarError> {
     let mut rng = StdRng::from_entropy();
-    let mut salt: Key = Default::default();
-    let mut seed: Key = Default::default();
+    let mut salt: Key = Zeroizing::new([0u8; KEY_SIZE]);
+    let mut seed: Key = Zeroizing::new([0u8; KEY_SIZE]);
 
-    rng.fill_bytes(&mut salt);
-    rng.fill_bytes(&mut seed);
+    rng.fill_bytes(salt.as_mut());
+    rng.fill_bytes(seed.as_mut());
 
-    let stretch_key = generate_stretch_key(passphrase, &salt)?;
+    let stretch_key = generate_stretch_key(passphrase, salt.as_ref())?;
     let auth_key = generate_derived_key(&stretch_key, AUTH_KEY_INFO);
 
     let mut encrypted_seed = seed.as_ref().to_vec();
@@ -82,16 +82,13 @@ pub fn init(passphrase: &str) -> Result<AuxiliaryData, CellarError> {
     cipher.apply_keystream(&mut encrypted_seed);
 
     Ok(AuxiliaryData {
-        salt: base64::encode_config(&salt, URL_SAFE_NO_PAD),
+        salt: base64::encode_config(salt.as_ref(), URL_SAFE_NO_PAD),
         encrypted_seed: base64::encode_config(&encrypted_seed, URL_SAFE_NO_PAD),
     })
 }
 
 /// generate master key from the passphrase and entropy
-pub fn generate_master_key(
-    passphrase: &str,
-    aux: &AuxiliaryData,
-) -> Result<Zeroizing<Key>, CellarError> {
+pub fn generate_master_key(passphrase: &str, aux: &AuxiliaryData) -> Result<Key, CellarError> {
     let salt = base64::decode_config(&aux.salt, URL_SAFE_NO_PAD)?;
     let mut seed = base64::decode_config(&aux.encrypted_seed, URL_SAFE_NO_PAD)?;
 
@@ -128,7 +125,7 @@ pub fn generate_app_key(
 
 /// generate application key based on parent key and path. e.g. `apps/my/awesome/app`.
 pub fn generate_app_key_by_path(
-    parent_key: Zeroizing<Key>,
+    parent_key: Key,
     path: &str,
     key_type: KeyType,
 ) -> Result<Vec<u8>, CellarError> {
@@ -140,7 +137,7 @@ pub fn generate_app_key_by_path(
 }
 
 /// covert the generated application key to a parent key which could be used to derive other keys
-pub fn as_parent_key(app_key: &[u8], key_type: KeyType) -> Result<Zeroizing<Key>, CellarError> {
+pub fn as_parent_key(app_key: &[u8], key_type: KeyType) -> Result<Key, CellarError> {
     match key_type {
         KeyType::Password => {
             let mut key = Zeroizing::new([0u8; KEY_SIZE]);
@@ -158,7 +155,7 @@ pub fn as_parent_key(app_key: &[u8], key_type: KeyType) -> Result<Zeroizing<Key>
 }
 
 #[inline]
-fn generate_stretch_key(passphrase: &str, salt: &[u8]) -> Result<Zeroizing<Key>, CellarError> {
+fn generate_stretch_key(passphrase: &str, salt: &[u8]) -> Result<Key, CellarError> {
     let hash = argon2::hash_raw(passphrase.as_bytes(), salt, &argon2::Config::default())?;
     let mut key = Zeroizing::new([0u8; KEY_SIZE]);
     key.copy_from_slice(&hash);
@@ -166,9 +163,9 @@ fn generate_stretch_key(passphrase: &str, salt: &[u8]) -> Result<Zeroizing<Key>,
 }
 
 #[inline]
-fn generate_derived_key(stretch_key: &Key, info: &[u8]) -> Zeroizing<Key> {
+fn generate_derived_key(stretch_key: &Key, info: &[u8]) -> Key {
     let mut params = Params::new();
-    params.key(stretch_key);
+    params.key(stretch_key.as_ref());
     let hash = params.hash(info).as_array().to_owned();
     let mut key = Zeroizing::new([0u8; KEY_SIZE]);
     key.copy_from_slice(&hash);
@@ -176,10 +173,7 @@ fn generate_derived_key(stretch_key: &Key, info: &[u8]) -> Zeroizing<Key> {
 }
 
 #[inline]
-fn generate_by_key_type(
-    app_key: Zeroizing<Key>,
-    key_type: KeyType,
-) -> Result<Vec<u8>, CellarError> {
+fn generate_by_key_type(app_key: Key, key_type: KeyType) -> Result<Vec<u8>, CellarError> {
     match key_type {
         KeyType::Password => Ok(Vec::from(&app_key[..])),
         KeyType::Keypair => {
