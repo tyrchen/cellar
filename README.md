@@ -21,7 +21,8 @@ By using Cellar, you don't need to trust the cloud provider to store your passwo
 
 Cellar is a MVP at the moment. Some future items:
 
-* [*] support hierarchical keys
+* [x] support hierarchical keys
+* [x] zeroize keys for security purpose
 * [ ] generate password by a set of rules (min / max / character set)
 * [ ] record the app_info and the rule it uses in an encrypted file
 * [ ] provide a WebUI to make it easy to use
