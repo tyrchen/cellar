@@ -21,6 +21,7 @@ By using Cellar, you don't need to trust the cloud provider to store your passwo
 
 Cellar is a MVP at the moment. Some future items:
 
+* [*] support hierarchical keys
 * [ ] generate password by a set of rules (min / max / character set)
 * [ ] record the app_info and the rule it uses in an encrypted file
 * [ ] provide a WebUI to make it easy to use
@@ -50,12 +51,31 @@ Note that even if you regenerate the cellar with the same password you will get 
 
 ### cellar generate
 
-Generate an application password.
+Generate an application password:
 
 ```bash
 $ cellar generate --app-info "user@gmail.com"
 Password: [hidden]
 Password for user@gmail.com: FLugCDPDQ5NP_Nb0whUMwY2YD3wMWqoGcoywqqZ_JSU
+```
+
+Generate hierarchical keys:
+
+```bash
+# generate parent key
+$ cellar generate -i "apps"
+Password: [hidden]
+Key for apps: 6CAakhEv_L2purgTfUasrvA9qgRZrQGdETDohSbBvNI
+
+# generate app key by using parent key
+$ cellar generate -i "my/awesome/app" --use-parent-key
+Parent Key: [hidden]
+Key for my/awesome/app: ZFqgQZK4Sx4GgwLn9D-qmhYE5gw0QbUSl4I8HaTseZs
+
+# it would be the same as generate the whole hierarchical key with master password
+$ cellar generate -i "apps/my/awesome/app"
+Password: [hidden]
+Key for apps/my/awesome/app: ZFqgQZK4Sx4GgwLn9D-qmhYE5gw0QbUSl4I8HaTseZs
 ```
 
 ## Benchmark

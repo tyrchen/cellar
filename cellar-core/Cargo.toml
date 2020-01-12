@@ -33,6 +33,7 @@ rand = "0.7"
 rust-argon2 = "0.6"
 serde = { version = "1", features = ["derive"] }
 thiserror = "1"
+zeroize = { version = "1", features = ["zeroize_derive"]}
 
 [dev-dependencies]
 criterion = "0.3"

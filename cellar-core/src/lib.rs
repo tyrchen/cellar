@@ -32,20 +32,22 @@ use c2_chacha::ChaCha20;
 use ed25519_dalek::{Keypair, PublicKey, SecretKey};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
+use zeroize::{Zeroize, Zeroizing};
 
 mod error;
 pub use error::CellarError;
 
-pub type Key = [u8; 32];
+const KEY_SIZE: usize = 32;
+pub type Key = [u8; KEY_SIZE];
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Zeroize)]
+#[zeroize(drop)]
 pub struct AuxiliaryData {
     salt: String,
     encrypted_seed: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum KeyType {
     Password,
     Keypair,
@@ -76,13 +78,40 @@ pub fn init(passphrase: &str) -> Result<AuxiliaryData, CellarError> {
 
     let mut encrypted_seed = seed.as_ref().to_vec();
     let nonce = &salt[..CHACHA20_NONCE_LENGTH];
-    let mut cipher = ChaCha20::new_var(&auth_key, nonce).unwrap();
+    let mut cipher = ChaCha20::new_var(auth_key.as_ref(), nonce).unwrap();
     cipher.apply_keystream(&mut encrypted_seed);
 
     Ok(AuxiliaryData {
         salt: base64::encode_config(&salt, URL_SAFE_NO_PAD),
         encrypted_seed: base64::encode_config(&encrypted_seed, URL_SAFE_NO_PAD),
     })
+}
+
+/// generate master key from the passphrase and entropy
+pub fn generate_master_key(
+    passphrase: &str,
+    aux: &AuxiliaryData,
+) -> Result<Zeroizing<Key>, CellarError> {
+    let salt = base64::decode_config(&aux.salt, URL_SAFE_NO_PAD)?;
+    let mut seed = base64::decode_config(&aux.encrypted_seed, URL_SAFE_NO_PAD)?;
+
+    // stretch the passphrase to 32 bytes long
+    let stretch_key = generate_stretch_key(passphrase, &salt)?;
+
+    // generate a not so strong auth key for encrypting the secure random
+    let auth_key = generate_derived_key(&stretch_key, AUTH_KEY_INFO);
+
+    // generate master key main part
+    let partial_key = generate_derived_key(&stretch_key, MASTER_KEY_INFO);
+
+    // recover master seed
+    let nonce = &salt[..CHACHA20_NONCE_LENGTH];
+    let mut cipher = ChaCha20::new_var(auth_key.as_ref(), nonce).unwrap();
+    cipher.apply_keystream(&mut seed);
+
+    // recover master key
+    let master_key = generate_derived_key(&partial_key, &seed);
+    Ok(master_key)
 }
 
 /// generate application key based on user's passphrase, auxilliary data (salt and seed), as well as the app info as an entropy.
@@ -99,7 +128,7 @@ pub fn generate_app_key(
 
 /// generate application key based on parent key and path. e.g. `apps/my/awesome/app`.
 pub fn generate_app_key_by_path(
-    parent_key: Key,
+    parent_key: Zeroizing<Key>,
     path: &str,
     key_type: KeyType,
 ) -> Result<Vec<u8>, CellarError> {
@@ -111,63 +140,50 @@ pub fn generate_app_key_by_path(
 }
 
 /// covert the generated application key to a parent key which could be used to derive other keys
-pub fn as_parent_key(app_key: &[u8], key_type: KeyType) -> Result<Key, CellarError> {
+pub fn as_parent_key(app_key: &[u8], key_type: KeyType) -> Result<Zeroizing<Key>, CellarError> {
     match key_type {
-        KeyType::Password => Ok(<Key>::try_from(app_key)?),
+        KeyType::Password => {
+            let mut key = Zeroizing::new([0u8; KEY_SIZE]);
+            key.copy_from_slice(app_key);
+            Ok(key)
+        }
         KeyType::Keypair => {
             let keypair = Keypair::from_bytes(app_key)?;
-            let secret_key = keypair.secret.to_bytes();
-            Ok(secret_key)
+            let mut sk = Zeroizing::new([0u8; KEY_SIZE]);
+            sk.copy_from_slice(keypair.secret.as_bytes());
+            Ok(sk)
         }
         KeyType::Certificate => unimplemented!(),
     }
 }
 
 #[inline]
-fn generate_master_key(passphrase: &str, aux: &AuxiliaryData) -> Result<Key, CellarError> {
-    let salt = base64::decode_config(&aux.salt, URL_SAFE_NO_PAD)?;
-    let mut seed = base64::decode_config(&aux.encrypted_seed, URL_SAFE_NO_PAD)?;
-
-    // stretch the passphrase to 32 bytes long
-    let stretch_key = generate_stretch_key(passphrase, &salt)?;
-
-    // generate a not so strong auth key for encrypting the secure random
-    let auth_key = generate_derived_key(&stretch_key, AUTH_KEY_INFO);
-
-    // generate master key main part
-    let partial_key = generate_derived_key(&stretch_key, MASTER_KEY_INFO);
-
-    // recover master seed
-    let nonce = &salt[..CHACHA20_NONCE_LENGTH];
-    let mut cipher = ChaCha20::new_var(&auth_key, nonce).unwrap();
-    cipher.apply_keystream(&mut seed);
-
-    // recover master key
-    let master_key = generate_derived_key(&partial_key, &seed);
-    Ok(master_key)
-}
-
-#[inline]
-fn generate_stretch_key(passphrase: &str, salt: &[u8]) -> Result<Key, CellarError> {
+fn generate_stretch_key(passphrase: &str, salt: &[u8]) -> Result<Zeroizing<Key>, CellarError> {
     let hash = argon2::hash_raw(passphrase.as_bytes(), salt, &argon2::Config::default())?;
-    let mut array: Key = Default::default();
-    array.copy_from_slice(&hash);
-    Ok(array)
+    let mut key = Zeroizing::new([0u8; KEY_SIZE]);
+    key.copy_from_slice(&hash);
+    Ok(key)
 }
 
 #[inline]
-fn generate_derived_key(stretch_key: &Key, info: &[u8]) -> Key {
+fn generate_derived_key(stretch_key: &Key, info: &[u8]) -> Zeroizing<Key> {
     let mut params = Params::new();
     params.key(stretch_key);
-    params.hash(info).as_array().to_owned()
+    let hash = params.hash(info).as_array().to_owned();
+    let mut key = Zeroizing::new([0u8; KEY_SIZE]);
+    key.copy_from_slice(&hash);
+    key
 }
 
 #[inline]
-fn generate_by_key_type(app_key: Key, key_type: KeyType) -> Result<Vec<u8>, CellarError> {
+fn generate_by_key_type(
+    app_key: Zeroizing<Key>,
+    key_type: KeyType,
+) -> Result<Vec<u8>, CellarError> {
     match key_type {
         KeyType::Password => Ok(Vec::from(&app_key[..])),
         KeyType::Keypair => {
-            let secret: SecretKey = SecretKey::from_bytes(&app_key).unwrap();
+            let secret: SecretKey = SecretKey::from_bytes(app_key.as_ref()).unwrap();
             let public: PublicKey = (&secret).into();
             let keypair = Keypair { secret, public };
 

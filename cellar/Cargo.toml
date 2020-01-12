@@ -28,8 +28,8 @@ keywords = ["password", "security", "cryptography"]
 [dependencies]
 anyhow = "1"
 base64 = "0.11"
-# cellar-core = { path = "../cellar-core" }
-cellar-core = "0.1.1"
+cellar-core = { path = "../cellar-core" }
+# cellar-core = "0.1.1"
 dialoguer = "0.5"
 dirs = "2"
 structopt = "0.3"
