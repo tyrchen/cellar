@@ -21,7 +21,7 @@
 //! ```rust
 //! let passphrase = "hello";
 //! let aux = cellar_core::init(passphrase).unwrap();
-//! let app_key = cellar_core::generate_app_key(passphrase, &aux, "user@gmail.com".as_bytes(), Default::default()).unwrap();
+//! let app_key = cellar_core::generate_app_key(passphrase, &aux, b"user@gmail.com", Default::default()).unwrap();
 //! ```
 //!
 //! You can also use the CLI version of the tool, which could be found in the repository.
@@ -200,27 +200,12 @@ mod tests {
     fn same_passphrase_produce_same_keys() -> Result<(), CellarError> {
         let passphrase = "hello";
         let aux = init(passphrase)?;
-        let app_key = generate_app_key(
-            passphrase,
-            &aux,
-            "user@gmail.com".as_bytes(),
-            KeyType::Password,
-        )?;
-        let app_key1 = generate_app_key(
-            passphrase,
-            &aux,
-            "user1@gmail.com".as_bytes(),
-            KeyType::Password,
-        )?;
+        let app_key = generate_app_key(passphrase, &aux, b"user@gmail.com", KeyType::Password)?;
+        let app_key1 = generate_app_key(passphrase, &aux, b"user1@gmail.com", KeyType::Password)?;
 
         assert_ne!(app_key1, app_key);
 
-        let app_key2 = generate_app_key(
-            passphrase,
-            &aux,
-            "user@gmail.com".as_bytes(),
-            KeyType::Password,
-        )?;
+        let app_key2 = generate_app_key(passphrase, &aux, b"user@gmail.com", KeyType::Password)?;
         assert_eq!(app_key2, app_key);
         Ok(())
     }
