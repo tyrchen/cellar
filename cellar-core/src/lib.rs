@@ -229,12 +229,7 @@ mod tests {
     fn generate_usable_keypair_should_work() -> Result<(), CellarError> {
         let passphrase = "hello";
         let aux = init(passphrase)?;
-        let key = generate_app_key(
-            passphrase,
-            &aux,
-            "user@gmail.com".as_bytes(),
-            KeyType::Keypair,
-        )?;
+        let key = generate_app_key(passphrase, &aux, b"user@gmail.com", KeyType::Keypair)?;
 
         let keypair = Keypair::from_bytes(&key[..]).unwrap();
         let content = b"hello world";
@@ -249,7 +244,7 @@ mod tests {
         let passphrase = "hello";
         let aux = init(passphrase)?;
         let key = generate_master_key(passphrase, &aux)?;
-        let parent_key = generate_app_key(passphrase, &aux, "apps".as_bytes(), KeyType::Password)?;
+        let parent_key = generate_app_key(passphrase, &aux, b"apps", KeyType::Password)?;
         let app_key = generate_app_key_by_path(key, "apps/my/awesome/key", KeyType::Password)?;
         let app_key1 = generate_app_key_by_path(
             as_parent_key(&parent_key, KeyType::Password)?,
