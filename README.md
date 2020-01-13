@@ -1,5 +1,7 @@
 # Cellar
 
+![Build Action](https://github.com/tyrchen/cellar/workflows/build/badge.svg) ![Release Action](https://github.com/tyrchen/cellar/workflows/release/badge.svg) ![Docs](https://docs.rs/cellar-core/badge.svg) ![crates.io](https://img.shields.io/crates/v/cellar-core.svg)
+
 Cellar is a simple password generation / retrival tool inspired by [Technology Preview for secure value recovery](https://signal.org/blog/secure-value-recovery/). The main algorithm is (a little bit tweak against original one):
 
 ```bash
