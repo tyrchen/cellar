@@ -137,21 +137,10 @@ pub fn generate_app_key_by_path(
 }
 
 /// covert the generated application key to a parent key which could be used to derive other keys
-pub fn as_parent_key(app_key: &[u8], key_type: KeyType) -> Result<Key, CellarError> {
-    match key_type {
-        KeyType::Password => {
-            let mut key = Zeroizing::new([0u8; KEY_SIZE]);
-            key.copy_from_slice(app_key);
-            Ok(key)
-        }
-        KeyType::Keypair => {
-            let keypair = Keypair::from_bytes(app_key)?;
-            let mut sk = Zeroizing::new([0u8; KEY_SIZE]);
-            sk.copy_from_slice(keypair.secret.as_bytes());
-            Ok(sk)
-        }
-        KeyType::Certificate => unimplemented!(),
-    }
+pub fn as_parent_key(app_key: &[u8]) -> Key {
+    let mut key = Zeroizing::new([0u8; KEY_SIZE]);
+    key.copy_from_slice(app_key);
+    key
 }
 
 #[inline]
@@ -232,7 +221,7 @@ mod tests {
         let parent_key = generate_app_key(passphrase, &aux, b"apps", KeyType::Password)?;
         let app_key = generate_app_key_by_path(key, "apps/my/awesome/key", KeyType::Password)?;
         let app_key1 = generate_app_key_by_path(
-            as_parent_key(&parent_key, KeyType::Password)?,
+            as_parent_key(&parent_key),
             "my/awesome/key",
             KeyType::Password,
         )?;
