@@ -39,7 +39,7 @@ pub mod commands;
 pub use commands::{Command, ConfigFile};
 
 fn main() -> Result<()> {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let cmd = Command::from_args();
 
     let fut = async {

@@ -8,7 +8,7 @@ name = "cellar-core"
 #   - README.md
 # - Update CHANGELOG.md.
 # - Create git tag.
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Tyr Chen <tyr.chen@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -25,20 +25,20 @@ keywords = ["password", "security", "cryptography"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-base64 = "0.11"
+base64 = "0.13"
 blake2s_simd = "0.5"
-c2-chacha = "0.2"
-ed25519-dalek = "1.0.0-pre.3"
-rand = "0.7"
-rust-argon2 = "0.6"
+c2-chacha = "0.3"
+ed25519-dalek = "1"
+rand = "0.8"
+rust-argon2 = "0.8"
 serde = { version = "1", features = ["derive"] }
 thiserror = "1"
 zeroize = { version = "1", features = ["zeroize_derive"]}
 
 [dev-dependencies]
 criterion = "0.3"
-quickcheck = "0.9"
-quickcheck_macros = "0.8"
+quickcheck = "1"
+quickcheck_macros = "1"
 
 
 [[bench]]

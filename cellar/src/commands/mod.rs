@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use base64::URL_SAFE_NO_PAD;
 use cellar_core::{AuxiliaryData, KeyType};
-use dialoguer::{theme::ColorfulTheme, PasswordInput};
+use dialoguer::{theme::ColorfulTheme, Password};
 use std::path::PathBuf;
 use structopt::StructOpt;
 use tokio::fs;
@@ -92,7 +92,7 @@ pub async fn generate(
     let parent_key = if use_parent_key {
         let parent_key_str = prompt_parent_key()?;
         let data = base64::decode_config(&parent_key_str, URL_SAFE_NO_PAD)?;
-        cellar_core::as_parent_key(&data, key_type.clone())?
+        cellar_core::as_parent_key(&data)
     } else {
         let content = fs::read_to_string(name).await?;
         let aux: AuxiliaryData = toml::from_str(&content)?;
@@ -113,12 +113,12 @@ pub async fn generate(
 #[inline]
 fn prompt_password(confirmation: bool) -> Result<String> {
     let password = if confirmation {
-        PasswordInput::with_theme(&ColorfulTheme::default())
+        Password::with_theme(&ColorfulTheme::default())
             .with_prompt("Password")
             .with_confirmation("Repeat password", "Error: the passwords don't match.")
             .interact()?
     } else {
-        PasswordInput::with_theme(&ColorfulTheme::default())
+        Password::with_theme(&ColorfulTheme::default())
             .with_prompt("Password")
             .interact()?
     };
@@ -128,7 +128,7 @@ fn prompt_password(confirmation: bool) -> Result<String> {
 
 #[inline]
 fn prompt_parent_key() -> Result<String> {
-    let key = PasswordInput::with_theme(&ColorfulTheme::default())
+    let key = Password::with_theme(&ColorfulTheme::default())
         .with_prompt("Parent Key")
         .interact()?;
 

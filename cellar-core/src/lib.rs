@@ -29,10 +29,12 @@ use base64::URL_SAFE_NO_PAD;
 use blake2s_simd::Params;
 use c2_chacha::stream_cipher::{NewStreamCipher, SyncStreamCipher};
 use c2_chacha::ChaCha20;
-use ed25519_dalek::{Keypair, PublicKey, SecretKey};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
+
+// reexport ed25519_dalek data structure
+pub use ed25519_dalek::{Keypair, PublicKey, SecretKey, Signer, Verifier};
 
 mod error;
 pub use error::CellarError;
