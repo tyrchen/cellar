@@ -62,6 +62,15 @@ impl Default for KeyType {
     }
 }
 
+impl AuxiliaryData {
+    pub fn new(salt: &str, seed: &str) -> Self {
+        Self {
+            salt: salt.to_owned(),
+            encrypted_seed: seed.to_owned(),
+        }
+    }
+}
+
 const AUTH_KEY_INFO: &[u8] = b"Auth Key";
 const MASTER_KEY_INFO: &[u8] = b"Master Key";
 const CHACHA20_NONCE_LENGTH: usize = 8;
