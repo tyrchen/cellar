@@ -34,7 +34,9 @@ use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
 
 // reexport ed25519_dalek data structure
-pub use ed25519_dalek::{Keypair, PublicKey, SecretKey, Signer, Verifier};
+pub use ed25519_dalek::{
+    Keypair, PublicKey, SecretKey, Signature, SignatureError, Signer, Verifier,
+};
 
 mod error;
 pub use error::CellarError;

@@ -8,7 +8,7 @@ name = "cellar-core"
 #   - README.md
 # - Update CHANGELOG.md.
 # - Create git tag.
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Tyr Chen <tyr.chen@gmail.com>"]
 edition = "2018"
 license = "MIT"
