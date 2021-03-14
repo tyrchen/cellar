@@ -301,14 +301,14 @@ mod tests {
 
     #[test]
     fn generate_ca_cert_should_work() -> Result<(), CellarError> {
-        let info = CertInfo::new(&["domain.com"], &[], "US", "Domain Inc.", "Domain CA", None);
-        let (parent_key, cert_pem) = generate_ca(info.clone())?;
+        let info = CertInfo::new(&["localhost"], &[], "US", "Domain Inc.", "Domain CA", None);
+        let (_, parent_key, cert_pem) = generate_ca(info.clone())?;
 
         load_ca(&cert_pem.cert, &cert_pem.sk)?;
 
         let cert1 = generate_app_key_by_path(
             as_parent_key(&parent_key),
-            "domain.com/ca",
+            "localhost/ca",
             KeyType::CA(info),
         )?;
 
@@ -322,11 +322,11 @@ mod tests {
 
     #[test]
     fn generate_server_cert_should_work() -> Result<(), CellarError> {
-        let info = CertInfo::new(&["domain.com"], &[], "US", "Domain Inc.", "Domain CA", None);
-        let (parent_key, cert_pem) = generate_ca(info)?;
+        let info = CertInfo::new(&["localhost"], &[], "US", "Domain Inc.", "Domain CA", None);
+        let (key, parent_key, cert_pem) = generate_ca(info)?;
 
         let info = CertInfo::new(
-            &["domain.com"],
+            &["localhost"],
             &[],
             "US",
             "Domain Inc.",
@@ -334,16 +334,18 @@ mod tests {
             Some(365),
         );
         let cert = generate_app_key_by_path(
-            as_parent_key(&parent_key),
-            "domain.com/server",
+            key,
+            "apps/localhost/server",
             KeyType::ServerCert((cert_pem.cert.clone(), cert_pem.sk.clone(), info.clone())),
         )?;
 
         let cert1 = generate_app_key_by_path(
             as_parent_key(&parent_key),
-            "domain.com/server",
+            "localhost/server",
             KeyType::ServerCert((cert_pem.cert.clone(), cert_pem.sk.clone(), info)),
         )?;
+
+        println!("{}\n{}", &cert_pem.cert, &cert_pem.sk);
 
         let cert_pem: CertificatePem = bincode::deserialize(&cert)?;
         println!("{}\n{}", &cert_pem.cert, &cert_pem.sk);
@@ -355,30 +357,64 @@ mod tests {
 
     #[test]
     fn generate_client_cert_should_work() -> Result<(), CellarError> {
-        let info = CertInfo::new(&["domain.com"], &[], "US", "Domain Inc.", "Domain CA", None);
-        let (parent_key, cert_pem) = generate_ca(info)?;
+        let info = CertInfo::new(&["localhost"], &[], "US", "Domain Inc.", "Domain CA", None);
+        let (key, parent_key, ca_cert_pem) = generate_ca(info)?;
 
-        let info = CertInfo::new(&["domain.com"], &[], "US", "android", "abcd1234", Some(180));
-        let cert = generate_app_key_by_path(
+        println!("CA cert:\n\n{}\n{}", &ca_cert_pem.cert, &ca_cert_pem.sk);
+
+        let info = CertInfo::new(
+            &["localhost"],
+            &[],
+            "US",
+            "Domain Inc.",
+            "GRPC Server",
+            Some(365),
+        );
+        let server_cert = generate_app_key_by_path(
             as_parent_key(&parent_key),
-            "domain.com/client/abcd1234",
-            KeyType::ClientCert((cert_pem.cert.clone(), cert_pem.sk.clone(), info.clone())),
+            "localhost/server",
+            KeyType::ServerCert((
+                ca_cert_pem.cert.clone(),
+                ca_cert_pem.sk.clone(),
+                info.clone(),
+            )),
+        )?;
+
+        let server_cert_pem: CertificatePem = bincode::deserialize(&server_cert)?;
+        println!(
+            "Server cert:\n\n{}\n{}",
+            &server_cert_pem.cert, &server_cert_pem.sk
+        );
+
+        let info = CertInfo::new(&["localhost"], &[], "US", "android", "abcd1234", Some(180));
+        let client_cert = generate_app_key_by_path(
+            key,
+            "apps/localhost/client/abcd1234",
+            KeyType::ClientCert((
+                ca_cert_pem.cert.clone(),
+                ca_cert_pem.sk.clone(),
+                info.clone(),
+            )),
         )?;
 
         let cert1 = generate_app_key_by_path(
             as_parent_key(&parent_key),
-            "domain.com/client/abcd1234",
-            KeyType::ClientCert((cert_pem.cert.clone(), cert_pem.sk.clone(), info)),
+            "localhost/client/abcd1234",
+            KeyType::ClientCert((ca_cert_pem.cert.clone(), ca_cert_pem.sk.clone(), info)),
         )?;
 
-        let cert_pem: CertificatePem = bincode::deserialize(&cert)?;
-        println!("{}\n{}", &cert_pem.cert, &cert_pem.sk);
+        let client_cert_pem: CertificatePem = bincode::deserialize(&client_cert)?;
+        println!(
+            "Client cert:\n\n{}\n{}",
+            &client_cert_pem.cert, &client_cert_pem.sk
+        );
 
-        assert_eq!(cert, cert1);
+        assert_eq!(client_cert, cert1);
 
         Ok(())
     }
 
+    #[ignore]
     #[quickcheck]
     fn prop_same_passphrase_produce_same_keys(passphrase: String, app_info: String) -> bool {
         let aux = init(&passphrase).unwrap();
@@ -389,14 +425,15 @@ mod tests {
             == generate_app_key(&passphrase, &aux, &app_info.as_bytes(), KeyType::Password).unwrap()
     }
 
-    fn generate_ca(info: CertInfo) -> Result<(Vec<u8>, CertificatePem), CellarError> {
+    fn generate_ca(info: CertInfo) -> Result<(Key, Vec<u8>, CertificatePem), CellarError> {
         let passphrase = "hello";
         let aux = init(passphrase)?;
         let key = generate_master_key(passphrase, &aux)?;
         let parent_key = generate_app_key(passphrase, &aux, b"apps", KeyType::Password)?;
 
-        let cert = generate_app_key_by_path(key, "apps/domain.com/ca", KeyType::CA(info.clone()))?;
+        let cert =
+            generate_app_key_by_path(key.clone(), "apps/localhost/ca", KeyType::CA(info.clone()))?;
         let cert_pem: CertificatePem = bincode::deserialize(&cert)?;
-        Ok((parent_key, cert_pem))
+        Ok((key, parent_key, cert_pem))
     }
 }
