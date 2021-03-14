@@ -29,8 +29,10 @@ use base64::URL_SAFE_NO_PAD;
 use blake2s_simd::Params;
 use c2_chacha::stream_cipher::{NewStreamCipher, SyncStreamCipher};
 use c2_chacha::ChaCha20;
+use certify::{load_ca, CertInfo, KeyPair};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 use zeroize::{Zeroize, Zeroizing};
 
 // reexport ed25519_dalek data structure
@@ -51,11 +53,20 @@ pub struct AuxiliaryData {
     encrypted_seed: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CertificatePem {
+    pub cert: String,
+    pub sk: String,
+}
+
 #[derive(Debug, Clone)]
 pub enum KeyType {
     Password,
     Keypair,
-    Certificate,
+    Pkcs8,
+    CA(CertInfo),
+    ServerCert((String, String, CertInfo)),
+    ClientCert((String, String, CertInfo)),
 }
 
 impl Default for KeyType {
@@ -185,8 +196,54 @@ fn generate_by_key_type(app_key: Key, key_type: KeyType) -> Result<Vec<u8>, Cell
 
             Ok(Vec::from(&keypair.to_bytes()[..]))
         }
-        KeyType::Certificate => unimplemented!(),
+        KeyType::Pkcs8 => generate_pkcs8(app_key),
+        KeyType::CA(info) => {
+            let data = generate_pkcs8(app_key)?;
+            let keypair = KeyPair::try_from(&data[..])?;
+            let ca = info.ca_cert(Some(keypair))?;
+            let cert_pem = CertificatePem {
+                cert: ca.serialize_pem().unwrap(),
+                sk: ca.serialize_private_key_pem(),
+            };
+            Ok(bincode::serialize(&cert_pem)?)
+        }
+        KeyType::ServerCert((ca_pem, key_pem, info)) => {
+            let ca = load_ca(&ca_pem, &key_pem)?;
+            let data = generate_pkcs8(app_key)?;
+            let keypair = KeyPair::try_from(&data[..])?;
+            let cert = info.server_cert(Some(keypair))?;
+            let (server_cert_pem, server_key_pem) = ca.sign_cert(&cert)?;
+            let cert_pem = CertificatePem {
+                cert: server_cert_pem,
+                sk: server_key_pem,
+            };
+            Ok(bincode::serialize(&cert_pem)?)
+        }
+        KeyType::ClientCert((ca_pem, key_pem, info)) => {
+            let ca = load_ca(&ca_pem, &key_pem)?;
+            let data = generate_pkcs8(app_key)?;
+            let keypair = KeyPair::try_from(&data[..])?;
+            let cert = info.client_cert(Some(keypair))?;
+            let (server_cert_pem, server_key_pem) = ca.sign_cert(&cert)?;
+            let cert_pem = CertificatePem {
+                cert: server_cert_pem,
+                sk: server_key_pem,
+            };
+            Ok(bincode::serialize(&cert_pem)?)
+        }
     }
+}
+
+fn generate_pkcs8(app_key: Key) -> Result<Vec<u8>, CellarError> {
+    let secret: SecretKey = SecretKey::from_bytes(app_key.as_ref()).unwrap();
+    let public: PublicKey = (&secret).into();
+
+    let pkcs8_doc = cellar_pkcs8::wrap_key(
+        &cellar_pkcs8::ED25519_PKCS8_TEMPLATE,
+        &app_key[..],
+        public.as_bytes(),
+    );
+    Ok(pkcs8_doc.as_ref().to_vec())
 }
 
 #[cfg(test)]
@@ -242,6 +299,86 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn generate_ca_cert_should_work() -> Result<(), CellarError> {
+        let info = CertInfo::new(&["domain.com"], &[], "US", "Domain Inc.", "Domain CA", None);
+        let (parent_key, cert_pem) = generate_ca(info.clone())?;
+
+        load_ca(&cert_pem.cert, &cert_pem.sk)?;
+
+        let cert1 = generate_app_key_by_path(
+            as_parent_key(&parent_key),
+            "domain.com/ca",
+            KeyType::CA(info),
+        )?;
+
+        let cert_pem1: CertificatePem = bincode::deserialize(&cert1)?;
+
+        assert_eq!(&cert_pem.sk, &cert_pem1.sk);
+        assert_eq!(&cert_pem.cert, &cert_pem1.cert);
+
+        Ok(())
+    }
+
+    #[test]
+    fn generate_server_cert_should_work() -> Result<(), CellarError> {
+        let info = CertInfo::new(&["domain.com"], &[], "US", "Domain Inc.", "Domain CA", None);
+        let (parent_key, cert_pem) = generate_ca(info)?;
+
+        let info = CertInfo::new(
+            &["domain.com"],
+            &[],
+            "US",
+            "Domain Inc.",
+            "GRPC Server",
+            Some(365),
+        );
+        let cert = generate_app_key_by_path(
+            as_parent_key(&parent_key),
+            "domain.com/server",
+            KeyType::ServerCert((cert_pem.cert.clone(), cert_pem.sk.clone(), info.clone())),
+        )?;
+
+        let cert1 = generate_app_key_by_path(
+            as_parent_key(&parent_key),
+            "domain.com/server",
+            KeyType::ServerCert((cert_pem.cert.clone(), cert_pem.sk.clone(), info)),
+        )?;
+
+        let cert_pem: CertificatePem = bincode::deserialize(&cert)?;
+        println!("{}\n{}", &cert_pem.cert, &cert_pem.sk);
+
+        assert_eq!(cert, cert1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn generate_client_cert_should_work() -> Result<(), CellarError> {
+        let info = CertInfo::new(&["domain.com"], &[], "US", "Domain Inc.", "Domain CA", None);
+        let (parent_key, cert_pem) = generate_ca(info)?;
+
+        let info = CertInfo::new(&["domain.com"], &[], "US", "android", "abcd1234", Some(180));
+        let cert = generate_app_key_by_path(
+            as_parent_key(&parent_key),
+            "domain.com/client/abcd1234",
+            KeyType::ClientCert((cert_pem.cert.clone(), cert_pem.sk.clone(), info.clone())),
+        )?;
+
+        let cert1 = generate_app_key_by_path(
+            as_parent_key(&parent_key),
+            "domain.com/client/abcd1234",
+            KeyType::ClientCert((cert_pem.cert.clone(), cert_pem.sk.clone(), info)),
+        )?;
+
+        let cert_pem: CertificatePem = bincode::deserialize(&cert)?;
+        println!("{}\n{}", &cert_pem.cert, &cert_pem.sk);
+
+        assert_eq!(cert, cert1);
+
+        Ok(())
+    }
+
     #[quickcheck]
     fn prop_same_passphrase_produce_same_keys(passphrase: String, app_info: String) -> bool {
         let aux = init(&passphrase).unwrap();
@@ -250,5 +387,16 @@ mod tests {
 
         app_key
             == generate_app_key(&passphrase, &aux, &app_info.as_bytes(), KeyType::Password).unwrap()
+    }
+
+    fn generate_ca(info: CertInfo) -> Result<(Vec<u8>, CertificatePem), CellarError> {
+        let passphrase = "hello";
+        let aux = init(passphrase)?;
+        let key = generate_master_key(passphrase, &aux)?;
+        let parent_key = generate_app_key(passphrase, &aux, b"apps", KeyType::Password)?;
+
+        let cert = generate_app_key_by_path(key, "apps/domain.com/ca", KeyType::CA(info.clone()))?;
+        let cert_pem: CertificatePem = bincode::deserialize(&cert)?;
+        Ok((parent_key, cert_pem))
     }
 }

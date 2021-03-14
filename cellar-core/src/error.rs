@@ -15,6 +15,12 @@ pub enum CellarError {
     ConvertError(#[from] std::array::TryFromSliceError),
     #[error("{0}")]
     InvalidKeypair(#[from] ed25519_dalek::SignatureError),
+    #[error("Serialize cert error: {0}")]
+    SerializeError(#[from] bincode::Error),
+    #[error("Certify error: {0}")]
+    CertifyError(#[from] certify::CertifyError),
+    #[error("Rcgen error: {0}")]
+    RcgenError(#[from] rcgen::RcgenError),
     #[error("unknown error")]
     Unknown,
 }
