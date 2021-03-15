@@ -235,7 +235,7 @@ fn generate_by_key_type(app_key: Key, key_type: KeyType) -> Result<Vec<u8>, Cell
 }
 
 fn generate_pkcs8(app_key: Key) -> Result<Vec<u8>, CellarError> {
-    let secret: SecretKey = SecretKey::from_bytes(app_key.as_ref()).unwrap();
+    let secret: SecretKey = SecretKey::from_bytes(app_key.as_ref())?;
     let public: PublicKey = (&secret).into();
 
     let pkcs8_doc = cellar_pkcs8::wrap_key(
@@ -373,11 +373,7 @@ mod tests {
         let server_cert = generate_app_key_by_path(
             as_parent_key(&parent_key),
             "localhost/server",
-            KeyType::ServerCert((
-                ca_cert_pem.cert.clone(),
-                ca_cert_pem.sk.clone(),
-                info.clone(),
-            )),
+            KeyType::ServerCert((ca_cert_pem.cert.clone(), ca_cert_pem.sk.clone(), info)),
         )?;
 
         let server_cert_pem: CertificatePem = bincode::deserialize(&server_cert)?;
@@ -400,7 +396,7 @@ mod tests {
         let cert1 = generate_app_key_by_path(
             as_parent_key(&parent_key),
             "localhost/client/abcd1234",
-            KeyType::ClientCert((ca_cert_pem.cert.clone(), ca_cert_pem.sk.clone(), info)),
+            KeyType::ClientCert((ca_cert_pem.cert.clone(), ca_cert_pem.sk, info)),
         )?;
 
         let client_cert_pem: CertificatePem = bincode::deserialize(&client_cert)?;
@@ -431,8 +427,7 @@ mod tests {
         let key = generate_master_key(passphrase, &aux)?;
         let parent_key = generate_app_key(passphrase, &aux, b"apps", KeyType::Password)?;
 
-        let cert =
-            generate_app_key_by_path(key.clone(), "apps/localhost/ca", KeyType::CA(info.clone()))?;
+        let cert = generate_app_key_by_path(key.clone(), "apps/localhost/ca", KeyType::CA(info))?;
         let cert_pem: CertificatePem = bincode::deserialize(&cert)?;
         Ok((key, parent_key, cert_pem))
     }
