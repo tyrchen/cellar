@@ -52,7 +52,7 @@ fn main() -> Result<()> {
                 app_info,
                 key_type,
                 use_parent_key,
-            } => commands::generate(&name, &app_info, key_type, use_parent_key).await,
+            } => commands::generate(&name, &app_info, *key_type, use_parent_key).await,
         }
     };
 

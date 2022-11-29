@@ -14,13 +14,13 @@ fn parse_dir(src: &str) -> PathBuf {
     }
 }
 
-fn parse_type(src: &str) -> Result<KeyType> {
+fn parse_type(src: &str) -> Result<Box<KeyType>> {
     match src {
-        "password" => Ok(KeyType::Password),
-        "keypair" => Ok(KeyType::Keypair),
-        "certificate" => Ok(KeyType::Certificate),
+        "password" => Ok(Box::new(KeyType::Password)),
+        "keypair" => Ok(Box::new(KeyType::Keypair)),
+        // "certificate" => Ok(KeyType::Certificate),
         &_ => Err(anyhow!(format!(
-            "Invalid key type {}. Avaliable choices: password, keypair",
+            "Invalid key type {}. Available choices: password, keypair",
             src
         ))),
     }
@@ -45,7 +45,7 @@ pub enum Command {
         app_info: String,
         /// generated key type - password or keypair
         #[structopt(short = "t", parse(try_from_str=parse_type), default_value="password")]
-        key_type: KeyType,
+        key_type: Box<KeyType>,
         /// use parent key instead of password
         #[structopt(long)]
         use_parent_key: bool,

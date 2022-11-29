@@ -1,6 +1,7 @@
+fail_fast: false
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v2.3.0
+    rev: v4.3.0
     hooks:
       - id: check-byte-order-marker
       - id: check-case-conflict
@@ -11,36 +12,50 @@ repos:
       - id: mixed-line-ending
       - id: trailing-whitespace
   - repo: https://github.com/psf/black
-    rev: 19.3b0
+    rev: 22.10.0
     hooks:
       - id: black
   - repo: local
     hooks:
+      - id: typos
+        name: typos
+        description: Check typos in the code
+        entry: bash -c 'typos'
+        language: rust
+        files: \.*$
+        args: []
       - id: cargo-fmt
         name: cargo fmt
         description: Format files with rustfmt.
-        entry: cargo fmt --
+        entry: bash -c 'cargo fmt -- --check'
+        language: rust
+        files: \.rs$
+        args: []
+      - id: cargo-deny
+        name: cargo deny check
+        description: Check cargo dependencies
+        entry: bash -c 'cargo deny check -d'
         language: rust
         files: \.rs$
         args: []
       - id: cargo-check
         name: cargo check
         description: Check the package for errors.
-        entry: cargo check --all
+        entry: bash -c 'cargo check --all'
         language: rust
         files: \.rs$
         pass_filenames: false
-      - id: clippy
-        name: clippy
+      - id: cargo-clippy
+        name: cargo clippy
         description: Lint rust sources
-        entry: cargo clippy -- -D warnings
+        entry: bash -c 'cargo clippy --all-targets --all-features --tests --benches -- -D warnings'
         language: rust
         files: \.rs$
         pass_filenames: false
-      - id: test
-        name: cargo-test
+      - id: cargo-test
+        name: cargo test
         description: unit test for the project
-        entry: cargo test
+        entry: bash -c 'CELLA_ENV=test cargo nextest run --all-features'
         language: rust
         files: \.rs$
         pass_filenames: false

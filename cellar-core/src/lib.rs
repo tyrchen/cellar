@@ -1,4 +1,4 @@
-//! Cellar is a simple password generation / retrival tool inspired by Technology Preview for secure value recovery. The main algorithm is (a little bit tweak against original one):
+//! Cellar is a simple password generation / retrieval tool inspired by Technology Preview for secure value recovery. The main algorithm is (a little bit tweak against original one):
 //!
 //! ```bash
 //! salt            = Secure-Random(output_length=32)
@@ -29,7 +29,7 @@ use base64::URL_SAFE_NO_PAD;
 use blake2s_simd::Params;
 use c2_chacha::stream_cipher::{NewStreamCipher, SyncStreamCipher};
 use c2_chacha::ChaCha20;
-use certify::{load_ca, CertInfo, KeyPair};
+use certify::{CertInfo, KeyPair, CA};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -135,7 +135,7 @@ pub fn generate_master_key(passphrase: &str, aux: &AuxiliaryData) -> Result<Key,
     Ok(master_key)
 }
 
-/// generate application key based on user's passphrase, auxilliary data (salt and seed), as well as the app info as an entropy.
+/// generate application key based on user's passphrase, auxiliary data (salt and seed), as well as the app info as an entropy.
 pub fn generate_app_key(
     passphrase: &str,
     aux: &AuxiliaryData,
@@ -208,7 +208,7 @@ fn generate_by_key_type(app_key: Key, key_type: KeyType) -> Result<Vec<u8>, Cell
             Ok(bincode::serialize(&cert_pem)?)
         }
         KeyType::ServerCert((ca_pem, key_pem, info)) => {
-            let ca = load_ca(&ca_pem, &key_pem)?;
+            let ca = CA::load(&ca_pem, &key_pem)?;
             let data = generate_pkcs8(app_key)?;
             let keypair = KeyPair::try_from(&data[..])?;
             let cert = info.server_cert(Some(keypair))?;
@@ -220,7 +220,7 @@ fn generate_by_key_type(app_key: Key, key_type: KeyType) -> Result<Vec<u8>, Cell
             Ok(bincode::serialize(&cert_pem)?)
         }
         KeyType::ClientCert((ca_pem, key_pem, info)) => {
-            let ca = load_ca(&ca_pem, &key_pem)?;
+            let ca = CA::load(&ca_pem, &key_pem)?;
             let data = generate_pkcs8(app_key)?;
             let keypair = KeyPair::try_from(&data[..])?;
             let cert = info.client_cert(Some(keypair))?;
@@ -254,6 +254,8 @@ extern crate quickcheck_macros;
 
 #[cfg(test)]
 mod tests {
+    use certify::CertSigAlgo;
+
     use super::*;
     #[test]
     fn same_passphrase_produce_same_keys() -> Result<(), CellarError> {
@@ -301,10 +303,18 @@ mod tests {
 
     #[test]
     fn generate_ca_cert_should_work() -> Result<(), CellarError> {
-        let info = CertInfo::new(&["localhost"], &[], "US", "Domain Inc.", "Domain CA", None);
+        let info = CertInfo::new(
+            vec!["localhost"],
+            Vec::<String>::new(),
+            "US",
+            "Domain Inc.",
+            "Domain CA",
+            None,
+            CertSigAlgo::ED25519,
+        );
         let (_, parent_key, cert_pem) = generate_ca(info.clone())?;
 
-        load_ca(&cert_pem.cert, &cert_pem.sk)?;
+        CA::load(&cert_pem.cert, &cert_pem.sk)?;
 
         let cert1 = generate_app_key_by_path(
             as_parent_key(&parent_key),
@@ -322,16 +332,25 @@ mod tests {
 
     #[test]
     fn generate_server_cert_should_work() -> Result<(), CellarError> {
-        let info = CertInfo::new(&["localhost"], &[], "US", "Domain Inc.", "Domain CA", None);
+        let info = CertInfo::new(
+            vec!["localhost"],
+            Vec::<String>::new(),
+            "US",
+            "Domain Inc.",
+            "Domain CA",
+            None,
+            CertSigAlgo::ED25519,
+        );
         let (key, parent_key, cert_pem) = generate_ca(info)?;
 
         let info = CertInfo::new(
-            &["localhost"],
-            &[],
+            vec!["localhost"],
+            Vec::<String>::new(),
             "US",
             "Domain Inc.",
             "GRPC Server",
             Some(365),
+            CertSigAlgo::ED25519,
         );
         let cert = generate_app_key_by_path(
             key,
@@ -357,18 +376,27 @@ mod tests {
 
     #[test]
     fn generate_client_cert_should_work() -> Result<(), CellarError> {
-        let info = CertInfo::new(&["localhost"], &[], "US", "Domain Inc.", "Domain CA", None);
+        let info = CertInfo::new(
+            vec!["localhost"],
+            Vec::<String>::new(),
+            "US",
+            "Domain Inc.",
+            "Domain CA",
+            None,
+            CertSigAlgo::ED25519,
+        );
         let (key, parent_key, ca_cert_pem) = generate_ca(info)?;
 
         println!("CA cert:\n\n{}\n{}", &ca_cert_pem.cert, &ca_cert_pem.sk);
 
         let info = CertInfo::new(
-            &["localhost"],
-            &[],
+            vec!["localhost"],
+            Vec::<String>::new(),
             "US",
             "Domain Inc.",
             "GRPC Server",
             Some(365),
+            CertSigAlgo::ED25519,
         );
         let server_cert = generate_app_key_by_path(
             as_parent_key(&parent_key),
@@ -382,7 +410,15 @@ mod tests {
             &server_cert_pem.cert, &server_cert_pem.sk
         );
 
-        let info = CertInfo::new(&["localhost"], &[], "US", "android", "abcd1234", Some(180));
+        let info = CertInfo::new(
+            vec!["localhost"],
+            Vec::<String>::new(),
+            "US",
+            "android",
+            "abcd1234",
+            Some(180),
+            CertSigAlgo::ED25519,
+        );
         let client_cert = generate_app_key_by_path(
             key,
             "apps/localhost/client/abcd1234",
@@ -415,10 +451,10 @@ mod tests {
     fn prop_same_passphrase_produce_same_keys(passphrase: String, app_info: String) -> bool {
         let aux = init(&passphrase).unwrap();
         let app_key =
-            generate_app_key(&passphrase, &aux, &app_info.as_bytes(), KeyType::Password).unwrap();
+            generate_app_key(&passphrase, &aux, app_info.as_bytes(), KeyType::Password).unwrap();
 
         app_key
-            == generate_app_key(&passphrase, &aux, &app_info.as_bytes(), KeyType::Password).unwrap()
+            == generate_app_key(&passphrase, &aux, app_info.as_bytes(), KeyType::Password).unwrap()
     }
 
     fn generate_ca(info: CertInfo) -> Result<(Key, Vec<u8>, CertificatePem), CellarError> {

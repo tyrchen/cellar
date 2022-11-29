@@ -1,17 +1,18 @@
-BENCH_10=bench_cellar
-GIT_BRANCH=$(strip $(shell git symbolic-ref --short HEAD))
+install-dev:
+	@cargo build
+	@rm -f ~/.cargo/bin/cella && cp ./target/debug/cella ~/.cargo/bin/
 
-$(BENCH_10):
-	cargo bench --bench $@ --  --sample-size 10
+cov:
+	@cargo llvm-cov nextest --all-features --workspace --lcov --output-path coverage/lcov-$(shell date +%F).info
 
-pr:
-	@git push origin $(GIT_BRANCH)
-	@hub pull-request
+test:
+	@CELLA_ENV=test cargo nextest run --all-features
 
-link:
-	@rm -f $(HOME)/.cargo/bin/cellar
-	@ln -s $(HOME)/.target/debug/cellar $(HOME)/.cargo/bin/cellar
+release:
+	@cargo release tag --execute
+	@git cliff -o CHANGELOG.md
+	@git commit -a -m "Update CHANGELOG.md" || true
+	@git push origin master
+	@cargo release push --execute
 
-link-release:
-	@rm -f $(HOME)/.cargo/bin/cellar
-	@ln -s $(HOME)/.target/release/cellar $(HOME)/.cargo/bin/cellar
+.PHONY: install-dev cov test release

@@ -1,0 +1,5 @@
+[default.extend-words]
+referer = "referer"
+
+[files]
+extend-exclude = ["CHANGELOG.md"]

@@ -14,7 +14,7 @@ fn gen_app_key(c: &mut Criterion) {
             let mut info: [u8; 32] = Default::default();
             rng.fill_bytes(&mut buf);
             rng.fill_bytes(&mut info);
-            let passphrase = base64::encode_config(&buf, URL_SAFE_NO_PAD);
+            let passphrase = base64::encode_config(buf, URL_SAFE_NO_PAD);
             let aux = init(&passphrase).unwrap();
             generate_app_key(&passphrase, &aux, &info, KeyType::Password).unwrap();
         })
