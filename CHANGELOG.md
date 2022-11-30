@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [unreleased]
+## [cellar-v0.4.0] - 2022-11-30
 
 ### Features
 
