@@ -15,12 +15,8 @@ pub enum CellarError {
     ConvertError(#[from] std::array::TryFromSliceError),
     #[error("{0}")]
     InvalidKey(String),
-    #[cfg(feature = "pkcs8")]
     #[error("{0}")]
     InvalidKeypair(#[from] ed25519_compact::Error),
-    #[cfg(feature = "pkcs8")]
-    #[error("{0}")]
-    InvalidPkcs8(#[from] cellar_pkcs8::Error),
     #[error("Serialize cert error: {0}")]
     SerializeError(#[from] bincode::Error),
     #[error("Certify error: {0}")]
