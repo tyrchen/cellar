@@ -17,10 +17,10 @@ fn parse_dir(src: &str) -> PathBuf {
 fn parse_type(src: &str) -> Result<Box<KeyType>> {
     match src {
         "password" => Ok(Box::new(KeyType::Password)),
-        "keypair" => Ok(Box::new(KeyType::Keypair)),
+        // "keypair" => Ok(Box::new(KeyType::Keypair)),
         // "certificate" => Ok(KeyType::Certificate),
         &_ => Err(anyhow!(format!(
-            "Invalid key type {}. Available choices: password, keypair",
+            "Invalid key type {}. Available choices: password",
             src
         ))),
     }

@@ -29,16 +29,13 @@ use base64::URL_SAFE_NO_PAD;
 use blake2s_simd::Params;
 use c2_chacha::stream_cipher::{NewStreamCipher, SyncStreamCipher};
 use c2_chacha::ChaCha20;
+#[cfg(feature = "pkcs8")]
+use cellar_pkcs8::{Ed25519KeyPair, PkcsKeyType};
+#[cfg(feature = "pkcs8")]
 use certify::{CertInfo, KeyPair, CA};
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
 use zeroize::{Zeroize, Zeroizing};
-
-// reexport ed25519_dalek data structure
-pub use ed25519_dalek::{
-    Keypair, PublicKey, SecretKey, Signature, SignatureError, Signer, Verifier,
-};
 
 mod error;
 pub use error::CellarError;
@@ -46,7 +43,7 @@ pub use error::CellarError;
 pub const KEY_SIZE: usize = 32;
 pub type Key = Zeroizing<[u8; KEY_SIZE]>;
 
-#[derive(Serialize, Deserialize, Clone, Debug, Zeroize)]
+#[derive(Serialize, Deserialize, Clone, Debug, Zeroize, PartialEq, Eq)]
 #[zeroize(drop)]
 pub struct AuxiliaryData {
     salt: String,
@@ -62,10 +59,15 @@ pub struct CertificatePem {
 #[derive(Debug, Clone)]
 pub enum KeyType {
     Password,
+    #[cfg(feature = "pkcs8")]
     Keypair,
+    #[cfg(feature = "pkcs8")]
     Pkcs8,
+    #[cfg(feature = "pkcs8")]
     CA(CertInfo),
+    #[cfg(feature = "pkcs8")]
     ServerCert((String, String, CertInfo)),
+    #[cfg(feature = "pkcs8")]
     ClientCert((String, String, CertInfo)),
 }
 
@@ -87,6 +89,14 @@ impl AuxiliaryData {
 const AUTH_KEY_INFO: &[u8] = b"Auth Key";
 const MASTER_KEY_INFO: &[u8] = b"Master Key";
 const CHACHA20_NONCE_LENGTH: usize = 8;
+
+/// generate random passphrase
+pub fn random_passphrase() -> String {
+    let mut rng = StdRng::from_entropy();
+    let mut buf = [0u8; 32];
+    rng.fill_bytes(&mut buf);
+    base64::encode_config(buf, URL_SAFE_NO_PAD)
+}
 
 /// initialize a cellar. Return the salt and encrypted seed that user shall store them for future password generation and retrieval.
 pub fn init(passphrase: &str) -> Result<AuxiliaryData, CellarError> {
@@ -160,6 +170,19 @@ pub fn generate_app_key_by_path(
     generate_by_key_type(app_key, key_type)
 }
 
+pub fn to_base64(key: &[u8]) -> String {
+    base64::encode_config(key, URL_SAFE_NO_PAD)
+}
+
+pub fn from_base64(key: &str) -> Result<Key, CellarError> {
+    let data = base64::decode_config(key, URL_SAFE_NO_PAD)?;
+
+    let key: [u8; KEY_SIZE] = data
+        .try_into()
+        .map_err(|_e| CellarError::InvalidKey("Cannot convert the Vec<u8> to Key".to_owned()))?;
+    Ok(key.into())
+}
+
 /// covert the generated application key to a parent key which could be used to derive other keys
 pub fn as_parent_key(app_key: &[u8]) -> Key {
     let mut key = Zeroizing::new([0u8; KEY_SIZE]);
@@ -189,17 +212,21 @@ fn generate_derived_key(stretch_key: &Key, info: &[u8]) -> Key {
 fn generate_by_key_type(app_key: Key, key_type: KeyType) -> Result<Vec<u8>, CellarError> {
     match key_type {
         KeyType::Password => Ok(Vec::from(&app_key[..])),
-        KeyType::Keypair => {
-            let secret: SecretKey = SecretKey::from_bytes(app_key.as_ref()).unwrap();
-            let public: PublicKey = (&secret).into();
-            let keypair = Keypair { secret, public };
-
-            Ok(Vec::from(&keypair.to_bytes()[..]))
-        }
-        KeyType::Pkcs8 => generate_pkcs8(app_key),
+        #[cfg(feature = "pkcs8")]
+        KeyType::Keypair => Ok(cellar_pkcs8::generate_key(
+            app_key.as_ref(),
+            PkcsKeyType::ED25519,
+        )?),
+        #[cfg(feature = "pkcs8")]
+        KeyType::Pkcs8 => Ok(cellar_pkcs8::generate_pkcs8(
+            app_key.as_ref(),
+            PkcsKeyType::ED25519,
+        )?),
+        #[cfg(feature = "pkcs8")]
         KeyType::CA(info) => {
-            let data = generate_pkcs8(app_key)?;
-            let keypair = KeyPair::try_from(&data[..])?;
+            let key = cellar_pkcs8::generate_key(app_key.as_ref(), PkcsKeyType::ED25519)?;
+            let key = Ed25519KeyPair::from_slice(&key)?;
+            let keypair = KeyPair::from_der(&key.sk.to_der())?;
             let ca = info.ca_cert(Some(keypair))?;
             let cert_pem = CertificatePem {
                 cert: ca.serialize_pem().unwrap(),
@@ -207,10 +234,12 @@ fn generate_by_key_type(app_key: Key, key_type: KeyType) -> Result<Vec<u8>, Cell
             };
             Ok(bincode::serialize(&cert_pem)?)
         }
+        #[cfg(feature = "pkcs8")]
         KeyType::ServerCert((ca_pem, key_pem, info)) => {
             let ca = CA::load(&ca_pem, &key_pem)?;
-            let data = generate_pkcs8(app_key)?;
-            let keypair = KeyPair::try_from(&data[..])?;
+            let key = cellar_pkcs8::generate_key(app_key.as_ref(), PkcsKeyType::ED25519)?;
+            let key = Ed25519KeyPair::from_slice(&key)?;
+            let keypair = KeyPair::from_der(&key.sk.to_der())?;
             let cert = info.server_cert(Some(keypair))?;
             let (server_cert_pem, server_key_pem) = ca.sign_cert(&cert)?;
             let cert_pem = CertificatePem {
@@ -219,10 +248,12 @@ fn generate_by_key_type(app_key: Key, key_type: KeyType) -> Result<Vec<u8>, Cell
             };
             Ok(bincode::serialize(&cert_pem)?)
         }
+        #[cfg(feature = "pkcs8")]
         KeyType::ClientCert((ca_pem, key_pem, info)) => {
             let ca = CA::load(&ca_pem, &key_pem)?;
-            let data = generate_pkcs8(app_key)?;
-            let keypair = KeyPair::try_from(&data[..])?;
+            let key = cellar_pkcs8::generate_key(app_key.as_ref(), PkcsKeyType::ED25519)?;
+            let key = Ed25519KeyPair::from_slice(&key)?;
+            let keypair = KeyPair::from_der(&key.sk.to_der())?;
             let cert = info.client_cert(Some(keypair))?;
             let (server_cert_pem, server_key_pem) = ca.sign_cert(&cert)?;
             let cert_pem = CertificatePem {
@@ -234,18 +265,6 @@ fn generate_by_key_type(app_key: Key, key_type: KeyType) -> Result<Vec<u8>, Cell
     }
 }
 
-fn generate_pkcs8(app_key: Key) -> Result<Vec<u8>, CellarError> {
-    let secret: SecretKey = SecretKey::from_bytes(app_key.as_ref())?;
-    let public: PublicKey = (&secret).into();
-
-    let pkcs8_doc = cellar_pkcs8::wrap_key(
-        &cellar_pkcs8::ED25519_PKCS8_TEMPLATE,
-        &app_key[..],
-        public.as_bytes(),
-    );
-    Ok(pkcs8_doc.as_ref().to_vec())
-}
-
 #[cfg(test)]
 extern crate quickcheck;
 #[cfg(test)]
@@ -254,6 +273,9 @@ extern crate quickcheck_macros;
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "pkcs8")]
+    use cellar_pkcs8::Ed25519KeyPair;
+    #[cfg(feature = "pkcs8")]
     use certify::CertSigAlgo;
 
     use super::*;
@@ -271,16 +293,17 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "pkcs8")]
     #[test]
     fn generate_usable_keypair_should_work() -> Result<(), CellarError> {
         let passphrase = "hello";
         let aux = init(passphrase)?;
         let key = generate_app_key(passphrase, &aux, b"user@gmail.com", KeyType::Keypair)?;
 
-        let keypair = Keypair::from_bytes(&key[..]).unwrap();
+        let keypair = Ed25519KeyPair::from_slice(&key).unwrap();
         let content = b"hello world";
-        let sig = keypair.sign(content);
-        let verified = keypair.public.verify(content, &sig);
+        let sig = keypair.sk.sign(content, None);
+        let verified = keypair.pk.verify(content, &sig);
         assert!(verified.is_ok());
         Ok(())
     }
@@ -301,6 +324,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "pkcs8")]
     #[test]
     fn generate_ca_cert_should_work() -> Result<(), CellarError> {
         let info = CertInfo::new(
@@ -330,6 +354,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "pkcs8")]
     #[test]
     fn generate_server_cert_should_work() -> Result<(), CellarError> {
         let info = CertInfo::new(
@@ -374,6 +399,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "pkcs8")]
     #[test]
     fn generate_client_cert_should_work() -> Result<(), CellarError> {
         let info = CertInfo::new(
@@ -457,6 +483,7 @@ mod tests {
             == generate_app_key(&passphrase, &aux, app_info.as_bytes(), KeyType::Password).unwrap()
     }
 
+    #[cfg(feature = "pkcs8")]
     fn generate_ca(info: CertInfo) -> Result<(Key, Vec<u8>, CertificatePem), CellarError> {
         let passphrase = "hello";
         let aux = init(passphrase)?;
