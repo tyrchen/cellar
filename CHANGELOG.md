@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [cellar-core-v0.5.2] - 2022-12-02
+
+[c1a46a7](c1a46a7a4165368da66d3449697f16eeee144318)...[fd8a3a0](fd8a3a00576a7652376820e4a2e3bf7b22493ad4)
+
+### Features
+
+- Return pem for keypair ([fd8a3a0](fd8a3a00576a7652376820e4a2e3bf7b22493ad4) - 2022-12-02 by Tyr Chen)
+
 ## [cellar-v0.4.0] - 2022-11-30
 
 ### Features
