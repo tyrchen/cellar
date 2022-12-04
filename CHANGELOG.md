@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [cellar-v0.4.1] - 2022-12-04
+
+[fd8a3a0](fd8a3a00576a7652376820e4a2e3bf7b22493ad4)...[391e573](391e573352ca0145048ac728fa742dfa1a73eef9)
+
+### Bug Fixes
+
+- Generate der for Keypair rather than pem ([391e573](391e573352ca0145048ac728fa742dfa1a73eef9) - 2022-12-04 by Tyr Chen)
+
 ## [cellar-core-v0.5.2] - 2022-12-02
 
 [c1a46a7](c1a46a7a4165368da66d3449697f16eeee144318)...[fd8a3a0](fd8a3a00576a7652376820e4a2e3bf7b22493ad4)
