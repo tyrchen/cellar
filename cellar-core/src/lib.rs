@@ -206,7 +206,9 @@ fn generate_by_key_type(app_key: Key, key_type: KeyType) -> Result<Vec<u8>, Cell
         KeyType::Password => Ok(Vec::from(&app_key[..])),
         KeyType::Keypair => {
             let keypair = Ed25519KeyPair::from_seed(Ed25519Seed::from_slice(app_key.as_ref())?);
-            Ok(keypair.to_pem().into_bytes())
+            let mut ret = keypair.sk.to_der();
+            ret.extend_from_slice(&keypair.pk.to_der());
+            Ok(ret)
         }
         KeyType::CA(info) => {
             let key = Ed25519KeyPair::from_seed(Ed25519Seed::from_slice(app_key.as_ref())?);
@@ -276,8 +278,7 @@ mod tests {
         let aux = init(passphrase)?;
         let key = generate_app_key(passphrase, &aux, b"user@gmail.com", KeyType::Keypair)?;
 
-        let keypair =
-            Ed25519KeyPair::from_pem(&String::from_utf8(key).expect("should be string")).unwrap();
+        let keypair = Ed25519KeyPair::from_der(&key[..48]).unwrap();
         let content = b"hello world";
         let sig = keypair.sk.sign(content, None);
         let verified = keypair.pk.verify(content, &sig);
