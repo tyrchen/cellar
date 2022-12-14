@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [cellar-v0.5.0] - 2022-12-14
+
+[391e573](391e573352ca0145048ac728fa742dfa1a73eef9)...[c9a1159](c9a1159d1c4a69100f925f172340f262be4db9dd)
+
+### Features
+
+- Upgrade bincode & base64 ([c9a1159](c9a1159d1c4a69100f925f172340f262be4db9dd) - 2022-12-14 by Tyr Chen)
+
 ## [cellar-v0.4.1] - 2022-12-04
 
 [fd8a3a0](fd8a3a00576a7652376820e4a2e3bf7b22493ad4)...[391e573](391e573352ca0145048ac728fa742dfa1a73eef9)
