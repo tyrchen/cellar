@@ -8,7 +8,7 @@ name = "cellar"
 #   - README.md
 # - Update CHANGELOG.md.
 # - Create git tag.
-version = "0.4.1"
+version = "0.5.0"
 authors = ["Tyr Chen <tyr.chen@gmail.com>"]
 edition = "2021"
 license = "MIT"
@@ -27,10 +27,10 @@ keywords = ["password", "security", "cryptography"]
 
 [dependencies]
 anyhow = "1.0.66"
-base64 = "0.13.1"
-cellar-core = { version = "0.6.0", path = "../cellar-core" }
+base64 = "0.20.0"
+cellar-core = { version = "0.7.0", path = "../cellar-core" }
 dialoguer = "0.10.2"
 dirs = "4.0.0"
 structopt = "0.3.26"
-toml = "0.5.9"
-tokio = { version = "1.22.0", features = ["rt-multi-thread", "fs", "io-util"] }
+toml = "0.5.10"
+tokio = { version = "1.23.0", features = ["rt-multi-thread", "fs", "io-util"] }

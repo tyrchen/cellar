@@ -18,7 +18,9 @@ pub enum CellarError {
     #[error("{0}")]
     InvalidKeypair(#[from] ed25519_compact::Error),
     #[error("Serialize cert error: {0}")]
-    SerializeError(#[from] bincode::Error),
+    CertEncodeError(#[from] bincode::error::EncodeError),
+    #[error("Deserialize cert error: {0}")]
+    CertDecodeError(#[from] bincode::error::DecodeError),
     #[error("Certify error: {0}")]
     CertifyError(#[from] certify::CertifyError),
     #[error("Rcgen error: {0}")]

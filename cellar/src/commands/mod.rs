@@ -1,10 +1,13 @@
 use anyhow::{anyhow, Result};
-use base64::URL_SAFE_NO_PAD;
+use base64::engine::fast_portable::{self, FastPortable};
 use cellar_core::{AuxiliaryData, KeyType};
 use dialoguer::{theme::ColorfulTheme, Password};
 use std::path::PathBuf;
 use structopt::StructOpt;
 use tokio::fs;
+
+const URL_SAFE_ENGINE: FastPortable =
+    FastPortable::from(&base64::alphabet::URL_SAFE, fast_portable::NO_PAD);
 
 fn parse_dir(src: &str) -> PathBuf {
     if src.starts_with("~/") {
@@ -91,7 +94,7 @@ pub async fn generate(
 
     let parent_key = if use_parent_key {
         let parent_key_str = prompt_parent_key()?;
-        let data = base64::decode_config(&parent_key_str, URL_SAFE_NO_PAD)?;
+        let data = base64::decode_engine(&parent_key_str, &URL_SAFE_ENGINE)?;
         cellar_core::as_parent_key(&data)
     } else {
         let content = fs::read_to_string(name).await?;
@@ -105,7 +108,7 @@ pub async fn generate(
     println!(
         "Key for {}: {}",
         app_info,
-        base64::encode_config(&app_key[..], URL_SAFE_NO_PAD)
+        base64::encode_engine(&app_key[..], &URL_SAFE_ENGINE)
     );
     Ok(())
 }

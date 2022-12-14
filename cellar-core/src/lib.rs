@@ -25,7 +25,8 @@
 //! ```
 //!
 //! You can also use the CLI version of the tool, which could be found in the repository.
-use base64::URL_SAFE_NO_PAD;
+use base64::engine::fast_portable::{self, FastPortable};
+use bincode::{Decode, Encode};
 use blake2s_simd::Params;
 use c2_chacha::stream_cipher::{NewStreamCipher, SyncStreamCipher};
 use c2_chacha::ChaCha20;
@@ -41,6 +42,9 @@ pub use error::CellarError;
 pub const KEY_SIZE: usize = 32;
 pub type Key = Zeroizing<[u8; KEY_SIZE]>;
 
+const URL_SAFE_ENGINE: FastPortable =
+    FastPortable::from(&base64::alphabet::URL_SAFE, fast_portable::NO_PAD);
+
 #[derive(Serialize, Deserialize, Clone, Debug, Zeroize, PartialEq, Eq)]
 #[zeroize(drop)]
 pub struct AuxiliaryData {
@@ -48,7 +52,7 @@ pub struct AuxiliaryData {
     encrypted_seed: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct CertificatePem {
     pub cert: String,
     pub sk: String,
@@ -87,7 +91,7 @@ pub fn random_passphrase() -> String {
     let mut rng = StdRng::from_entropy();
     let mut buf = [0u8; 32];
     rng.fill_bytes(&mut buf);
-    base64::encode_config(buf, URL_SAFE_NO_PAD)
+    base64::encode_engine(buf, &URL_SAFE_ENGINE)
 }
 
 /// initialize a cellar. Return the salt and encrypted seed that user shall store them for future password generation and retrieval.
@@ -108,15 +112,15 @@ pub fn init(passphrase: &str) -> Result<AuxiliaryData, CellarError> {
     cipher.apply_keystream(&mut encrypted_seed);
 
     Ok(AuxiliaryData {
-        salt: base64::encode_config(salt.as_ref(), URL_SAFE_NO_PAD),
-        encrypted_seed: base64::encode_config(&encrypted_seed, URL_SAFE_NO_PAD),
+        salt: base64::encode_engine(salt.as_ref(), &URL_SAFE_ENGINE),
+        encrypted_seed: base64::encode_engine(&encrypted_seed, &URL_SAFE_ENGINE),
     })
 }
 
 /// generate master key from the passphrase and entropy
 pub fn generate_master_key(passphrase: &str, aux: &AuxiliaryData) -> Result<Key, CellarError> {
-    let salt = base64::decode_config(&aux.salt, URL_SAFE_NO_PAD)?;
-    let mut seed = base64::decode_config(&aux.encrypted_seed, URL_SAFE_NO_PAD)?;
+    let salt = base64::decode_engine(&aux.salt, &URL_SAFE_ENGINE)?;
+    let mut seed = base64::decode_engine(&aux.encrypted_seed, &URL_SAFE_ENGINE)?;
 
     // stretch the passphrase to 32 bytes long
     let stretch_key = generate_stretch_key(passphrase, &salt)?;
@@ -163,11 +167,11 @@ pub fn generate_app_key_by_path(
 }
 
 pub fn to_base64(key: &[u8]) -> String {
-    base64::encode_config(key, URL_SAFE_NO_PAD)
+    base64::encode_engine(key, &URL_SAFE_ENGINE)
 }
 
 pub fn from_base64(key: &str) -> Result<Key, CellarError> {
-    let data = base64::decode_config(key, URL_SAFE_NO_PAD)?;
+    let data = base64::decode_engine(key, &URL_SAFE_ENGINE)?;
 
     let key: [u8; KEY_SIZE] = data
         .try_into()
@@ -218,7 +222,10 @@ fn generate_by_key_type(app_key: Key, key_type: KeyType) -> Result<Vec<u8>, Cell
                 cert: ca.serialize_pem().unwrap(),
                 sk: ca.serialize_private_key_pem(),
             };
-            Ok(bincode::serialize(&cert_pem)?)
+            Ok(bincode::encode_to_vec(
+                &cert_pem,
+                bincode::config::standard(),
+            )?)
         }
         KeyType::ServerCert((ca_pem, key_pem, info)) => {
             let ca = CA::load(&ca_pem, &key_pem)?;
@@ -230,7 +237,10 @@ fn generate_by_key_type(app_key: Key, key_type: KeyType) -> Result<Vec<u8>, Cell
                 cert: server_cert_pem,
                 sk: server_key_pem,
             };
-            Ok(bincode::serialize(&cert_pem)?)
+            Ok(bincode::encode_to_vec(
+                &cert_pem,
+                bincode::config::standard(),
+            )?)
         }
         KeyType::ClientCert((ca_pem, key_pem, info)) => {
             let ca = CA::load(&ca_pem, &key_pem)?;
@@ -242,7 +252,10 @@ fn generate_by_key_type(app_key: Key, key_type: KeyType) -> Result<Vec<u8>, Cell
                 cert: server_cert_pem,
                 sk: server_key_pem,
             };
-            Ok(bincode::serialize(&cert_pem)?)
+            Ok(bincode::encode_to_vec(
+                &cert_pem,
+                bincode::config::standard(),
+            )?)
         }
     }
 }
@@ -323,7 +336,8 @@ mod tests {
             KeyType::CA(info),
         )?;
 
-        let cert_pem1: CertificatePem = bincode::deserialize(&cert1)?;
+        let (cert_pem1, _) =
+            bincode::decode_from_slice::<CertificatePem, _>(&cert1, bincode::config::standard())?;
 
         assert_eq!(&cert_pem.sk, &cert_pem1.sk);
         assert_eq!(&cert_pem.cert, &cert_pem1.cert);
@@ -367,7 +381,8 @@ mod tests {
 
         println!("{}\n{}", &cert_pem.cert, &cert_pem.sk);
 
-        let cert_pem: CertificatePem = bincode::deserialize(&cert)?;
+        let (cert_pem, _) =
+            bincode::decode_from_slice::<CertificatePem, _>(&cert, bincode::config::standard())?;
         println!("{}\n{}", &cert_pem.cert, &cert_pem.sk);
 
         assert_eq!(cert, cert1);
@@ -405,7 +420,10 @@ mod tests {
             KeyType::ServerCert((ca_cert_pem.cert.clone(), ca_cert_pem.sk.clone(), info)),
         )?;
 
-        let server_cert_pem: CertificatePem = bincode::deserialize(&server_cert)?;
+        let (server_cert_pem, _) = bincode::decode_from_slice::<CertificatePem, _>(
+            &server_cert,
+            bincode::config::standard(),
+        )?;
         println!(
             "Server cert:\n\n{}\n{}",
             &server_cert_pem.cert, &server_cert_pem.sk
@@ -436,7 +454,10 @@ mod tests {
             KeyType::ClientCert((ca_cert_pem.cert.clone(), ca_cert_pem.sk, info)),
         )?;
 
-        let client_cert_pem: CertificatePem = bincode::deserialize(&client_cert)?;
+        let (client_cert_pem, _) = bincode::decode_from_slice::<CertificatePem, _>(
+            &client_cert,
+            bincode::config::standard(),
+        )?;
         println!(
             "Client cert:\n\n{}\n{}",
             &client_cert_pem.cert, &client_cert_pem.sk
@@ -465,7 +486,8 @@ mod tests {
         let parent_key = generate_app_key(passphrase, &aux, b"apps", KeyType::Password)?;
 
         let cert = generate_app_key_by_path(key.clone(), "apps/localhost/ca", KeyType::CA(info))?;
-        let cert_pem: CertificatePem = bincode::deserialize(&cert)?;
+        let (cert_pem, _) =
+            bincode::decode_from_slice::<CertificatePem, _>(&cert, bincode::config::standard())?;
         Ok((key, parent_key, cert_pem))
     }
 }
