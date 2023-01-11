@@ -1,10 +1,7 @@
-use base64::engine::fast_portable::{self, FastPortable};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use cellar_core::{generate_app_key, init, KeyType};
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::RngCore;
-
-const URL_SAFE_ENGINE: FastPortable =
-    FastPortable::from(&base64::alphabet::URL_SAFE, fast_portable::NO_PAD);
 
 criterion_group!(benches, gen_app_key);
 criterion_main!(benches);
@@ -17,7 +14,7 @@ fn gen_app_key(c: &mut Criterion) {
             let mut info: [u8; 32] = Default::default();
             rng.fill_bytes(&mut buf);
             rng.fill_bytes(&mut info);
-            let passphrase = base64::encode_engine(buf, &URL_SAFE_ENGINE);
+            let passphrase = URL_SAFE_NO_PAD.encode(buf);
             let aux = init(&passphrase).unwrap();
             generate_app_key(&passphrase, &aux, &info, KeyType::Password).unwrap();
         })

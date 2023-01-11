@@ -8,7 +8,7 @@ name = "cellar"
 #   - README.md
 # - Update CHANGELOG.md.
 # - Create git tag.
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Tyr Chen <tyr.chen@gmail.com>"]
 edition = "2021"
 license = "MIT"
@@ -26,11 +26,11 @@ keywords = ["password", "security", "cryptography"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.66"
-base64 = "0.20.0"
-cellar-core = { version = "0.7.0", path = "../cellar-core" }
+anyhow = "1.0.68"
+base64 = "0.21.0"
+cellar-core = { version = "0.7.1", path = "../cellar-core" }
 dialoguer = "0.10.2"
 dirs = "4.0.0"
 structopt = "0.3.26"
 toml = "0.5.10"
-tokio = { version = "1.23.0", features = ["rt-multi-thread", "fs", "io-util"] }
+tokio = { version = "1.24.1", features = ["rt-multi-thread", "fs", "io-util"] }

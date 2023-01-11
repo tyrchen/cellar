@@ -8,7 +8,7 @@ name = "cellar-core"
 #   - README.md
 # - Update CHANGELOG.md.
 # - Create git tag.
-version = "0.7.0"
+version = "0.7.1"
 authors = ["Tyr Chen <tyr.chen@gmail.com>"]
 edition = "2021"
 license = "MIT"
@@ -24,16 +24,16 @@ keywords = ["password", "security", "cryptography"]
 
 
 [dependencies]
-base64 = "0.20.0"
+base64 = "0.21.0"
 bincode = "2.0.0-rc.2"
 blake2s_simd = "1.0.0"
 c2-chacha = "0.3.3"
-certify = "0.5.1"
+certify = "0.5.2"
 rand = "0.8.5"
 rcgen = "0.10.0"
 rust-argon2 = "1.0.0"
-serde = { version = "1.0.150", features = ["derive"] }
-thiserror = "1.0.37"
+serde = { version = "1.0.152", features = ["derive"] }
+thiserror = "1.0.38"
 zeroize = { version = "1.5.7", features = ["zeroize_derive"] }
 ed25519-compact = { version = "2.0.4", features = ["ed25519"] }
 

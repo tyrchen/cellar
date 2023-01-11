@@ -25,7 +25,8 @@
 //! ```
 //!
 //! You can also use the CLI version of the tool, which could be found in the repository.
-use base64::engine::fast_portable::{self, FastPortable};
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
 use bincode::{Decode, Encode};
 use blake2s_simd::Params;
 use c2_chacha::stream_cipher::{NewStreamCipher, SyncStreamCipher};
@@ -41,9 +42,6 @@ pub use error::CellarError;
 
 pub const KEY_SIZE: usize = 32;
 pub type Key = Zeroizing<[u8; KEY_SIZE]>;
-
-const URL_SAFE_ENGINE: FastPortable =
-    FastPortable::from(&base64::alphabet::URL_SAFE, fast_portable::NO_PAD);
 
 #[derive(Serialize, Deserialize, Clone, Debug, Zeroize, PartialEq, Eq)]
 #[zeroize(drop)]
@@ -91,7 +89,7 @@ pub fn random_passphrase() -> String {
     let mut rng = StdRng::from_entropy();
     let mut buf = [0u8; 32];
     rng.fill_bytes(&mut buf);
-    base64::encode_engine(buf, &URL_SAFE_ENGINE)
+    URL_SAFE_NO_PAD.encode(buf)
 }
 
 /// initialize a cellar. Return the salt and encrypted seed that user shall store them for future password generation and retrieval.
@@ -112,15 +110,15 @@ pub fn init(passphrase: &str) -> Result<AuxiliaryData, CellarError> {
     cipher.apply_keystream(&mut encrypted_seed);
 
     Ok(AuxiliaryData {
-        salt: base64::encode_engine(salt.as_ref(), &URL_SAFE_ENGINE),
-        encrypted_seed: base64::encode_engine(&encrypted_seed, &URL_SAFE_ENGINE),
+        salt: URL_SAFE_NO_PAD.encode(salt.as_ref()),
+        encrypted_seed: URL_SAFE_NO_PAD.encode(&encrypted_seed),
     })
 }
 
 /// generate master key from the passphrase and entropy
 pub fn generate_master_key(passphrase: &str, aux: &AuxiliaryData) -> Result<Key, CellarError> {
-    let salt = base64::decode_engine(&aux.salt, &URL_SAFE_ENGINE)?;
-    let mut seed = base64::decode_engine(&aux.encrypted_seed, &URL_SAFE_ENGINE)?;
+    let salt = URL_SAFE_NO_PAD.decode(&aux.salt)?;
+    let mut seed = URL_SAFE_NO_PAD.decode(&aux.encrypted_seed)?;
 
     // stretch the passphrase to 32 bytes long
     let stretch_key = generate_stretch_key(passphrase, &salt)?;
@@ -167,11 +165,11 @@ pub fn generate_app_key_by_path(
 }
 
 pub fn to_base64(key: &[u8]) -> String {
-    base64::encode_engine(key, &URL_SAFE_ENGINE)
+    URL_SAFE_NO_PAD.encode(key)
 }
 
 pub fn from_base64(key: &str) -> Result<Key, CellarError> {
-    let data = base64::decode_engine(key, &URL_SAFE_ENGINE)?;
+    let data = URL_SAFE_NO_PAD.decode(key)?;
 
     let key: [u8; KEY_SIZE] = data
         .try_into()
