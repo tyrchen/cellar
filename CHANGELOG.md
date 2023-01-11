@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [cellar-v0.5.1] - 2023-01-11
+
+[c9a1159](c9a1159d1c4a69100f925f172340f262be4db9dd)...[b5ba655](b5ba655fefb0b27fb7077fac8b1cb261c26fa7f8)
+
+### Miscellaneous Tasks
+
+- Upgrade deps and fix issues caused by base64 0.21 ([b5ba655](b5ba655fefb0b27fb7077fac8b1cb261c26fa7f8) - 2023-01-11 by Tyr Chen)
+
 ## [cellar-v0.5.0] - 2022-12-14
 
 [391e573](391e573352ca0145048ac728fa742dfa1a73eef9)...[c9a1159](c9a1159d1c4a69100f925f172340f262be4db9dd)
