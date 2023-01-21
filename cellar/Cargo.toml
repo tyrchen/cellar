@@ -29,8 +29,8 @@ keywords = ["password", "security", "cryptography"]
 anyhow = "1.0.68"
 base64 = "0.21.0"
 cellar-core = { version = "0.7.1", path = "../cellar-core" }
-dialoguer = "0.10.2"
+dialoguer = "0.10.3"
 dirs = "4.0.0"
 structopt = "0.3.26"
-toml = "0.5.10"
-tokio = { version = "1.24.1", features = ["rt-multi-thread", "fs", "io-util"] }
+toml = "0.5.11"
+tokio = { version = "1.24.2", features = ["rt-multi-thread", "fs", "io-util"] }
