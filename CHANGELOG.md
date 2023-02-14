@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [cellar-v0.5.2] - 2023-02-14
+
+[b5ba655](b5ba655fefb0b27fb7077fac8b1cb261c26fa7f8)...[59e45cf](59e45cff2edb6111ed1d8eda060490a6059b211e)
+
+### Miscellaneous Tasks
+
+- Update deps ([ee7485f](ee7485fcf3653bdb54a5a3ea024716196eee513c) - 2023-01-21 by Tyr Chen)
+- Bump deps ([59e45cf](59e45cff2edb6111ed1d8eda060490a6059b211e) - 2023-02-14 by Tyr Chen)
+
 ## [cellar-v0.5.1] - 2023-01-11
 
 [c9a1159](c9a1159d1c4a69100f925f172340f262be4db9dd)...[b5ba655](b5ba655fefb0b27fb7077fac8b1cb261c26fa7f8)
